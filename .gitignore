@@ -1,0 +1,19 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+
+# Packaging / build
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# MemoryHub's own context hub — a separate git repo, synced via `mh sync`
+.memoryhub/

@@ -1,0 +1,16 @@
+[project]
+name = "memoryhub"
+version = "0.1.0"
+description = "mh — git-like checkpoints for purified AI session context"
+requires-python = ">=3.12"
+dependencies = ["typer"]
+
+[project.scripts]
+mh = "memoryhub.cli:app"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

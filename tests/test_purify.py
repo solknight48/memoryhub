@@ -1,0 +1,205 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from conftest import (
+    TIMEOUT,
+    make_pi_records,
+    make_records,
+    write_codex_rollout,
+    write_pi_transcript,
+    write_transcript,
+)
+
+ORIG = Path.home() / ".claude" / "skills" / "purify-context" / "purify.py"
+
+SID = "d4e5f6a7-4444-4444-8444-444444444444"
+PI_SKILL_SID = "019f74da-9631-7c10-9d05-d50425ec4001"
+CX_SKILL_SID = "019dee2a-7fd6-77e0-a429-ed6600009901"
+
+
+def _only_ckpt_body(hub_project):
+    ckdir = next(
+        d for d in (hub_project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir()
+    )
+    return next(ckdir.glob("*.md")).read_text()
+
+
+def test_pi_skill_wrapper_stripped(mh, ws, hub_project):
+    """pi prepends an invoked skill's whole body to the user turn; purify must
+    strip the <skill ...>...</skill> block but keep the real message after it."""
+    mh("checkpoint", "alpha", cwd=hub_project, check=0)
+    skill_q = (
+        '<skill name="memoryhub" '
+        'location="/Users/x/.pi/agent/skills/memoryhub/SKILL.md">\n'
+        "# MemoryHub workflow\nSKILL-BODY-MARKER should never reach memory.\n"
+        "</skill>\n\nload start please"
+    )
+    recs = make_pi_records(
+        [(skill_q, "ok answer")], cwd=str(hub_project), sid=PI_SKILL_SID
+    )
+    tr = write_pi_transcript(ws["home"], hub_project, PI_SKILL_SID, recs)
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    body = _only_ckpt_body(hub_project)
+    assert "load start please" in body  # real user text kept
+    assert "SKILL-BODY-MARKER" not in body  # skill body stripped
+    assert "<skill" not in body
+
+
+def test_codex_skill_wrapper_stripped(mh, ws, hub_project):
+    mh("checkpoint", "alpha", cwd=hub_project, check=0)
+    skill_q = (
+        "<skill>\n<name>skill-installer</name>\n<path>/x</path>\n"
+        "SKILL-BODY-MARKER should never reach memory.\n</skill>\n\n"
+        "actual codex question"
+    )
+    write_codex_rollout(ws["home"], hub_project, CX_SKILL_SID, [(skill_q, "ok")])
+    tr = next((ws["home"] / ".codex" / "sessions").rglob(f"*{CX_SKILL_SID}.jsonl"))
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    body = _only_ckpt_body(hub_project)
+    assert "actual codex question" in body
+    assert "SKILL-BODY-MARKER" not in body
+    assert "<skill" not in body
+
+
+JUNK = [
+    {
+        "type": "user",
+        "message": {"role": "user", "content": "<command-name>/foo</command-name>"},
+        "timestamp": "2026-07-10T04:10:00Z",
+    },
+    {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": "<local-command-stdout>noise</local-command-stdout>",
+        },
+    },
+    {
+        "type": "user",
+        "isMeta": True,
+        "message": {"role": "user", "content": "meta noise"},
+    },
+    {
+        "type": "user",
+        "isSidechain": True,
+        "message": {"role": "user", "content": "sidechain question"},
+    },
+    {
+        "type": "assistant",
+        "isSidechain": True,
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "sidechain answer"}],
+        },
+    },
+    {
+        "type": "user",
+        "message": {"role": "user", "content": "[Request interrupted by user]"},
+    },
+    {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "content": "tool output"}],
+        },
+    },
+    {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "tool_use", "name": "Bash"},
+            ],
+        },
+    },
+    {
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": "real question <system-reminder>reminder noise</system-reminder> tail",
+        },
+        "timestamp": "2026-07-10T04:20:00Z",
+    },
+    {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "real answer"}],
+        },
+        "timestamp": "2026-07-10T04:21:00Z",
+    },
+]
+
+
+def test_junk_filtered_and_timestamp_from_last_record(mh, ws, hub_project):
+    mh("checkpoint", "alpha", cwd=hub_project, check=0)
+    records = make_records([("first q", "first a")]) + JUNK
+    tr = write_transcript(ws["home"], hub_project, SID, records)
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    ckdir = next(
+        d for d in (hub_project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir()
+    )
+    saved = next(ckdir.glob("*.md"))
+    body = saved.read_text()
+    assert "first q" in body and "first a" in body
+    assert "real question" in body and "tail" in body and "real answer" in body
+    assert "## Q2" in body
+    for absent in (
+        "<system-reminder>",
+        "reminder noise",
+        "command-name",
+        "sidechain",
+        "meta noise",
+        "tool output",
+        "hmm",
+    ):
+        assert absent not in body
+    # filename timestamp = last record's timestamp (04:21 UTC)
+    assert saved.name == f"2026-07-10_0421_{SID[:8]}.md"
+
+
+@pytest.mark.skipif(not ORIG.is_file(), reason="original purify.py not on this machine")
+def test_parity_with_original_script(ws, tmp_path):
+    from memoryhub import purify as vendored
+
+    records = make_records([("hello", "there"), ("second", "answer")]) + JUNK
+    tr = tmp_path / "some-session.jsonl"
+    tr.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    out = tmp_path / "orig.md"
+    subprocess.run(
+        [sys.executable, str(ORIG), "--transcript", str(tr), "--out", str(out)],
+        check=True,
+        capture_output=True,
+        timeout=TIMEOUT,
+        cwd=str(tmp_path),
+        env=ws["env"],
+    )
+    turns, _ = vendored.build_turns(tr)
+    turns = vendored.drop_trailing_unanswered(turns)
+    assert vendored.render(turns, str(tr), None) == out.read_text()
+
+
+def test_trailing_unanswered_dropped(mh, ws, hub_project):
+    mh("checkpoint", "alpha", cwd=hub_project, check=0)
+    records = make_records([("answered", "yes")])
+    records.append(
+        {
+            "type": "user",
+            "message": {"role": "user", "content": "save this session please"},
+            "timestamp": "2026-07-10T05:00:00Z",
+        }
+    )
+    tr = write_transcript(ws["home"], hub_project, SID, records)
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    ckdir = next(
+        d for d in (hub_project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir()
+    )
+    body = next(ckdir.glob("*.md")).read_text()
+    assert "answered" in body
+    assert "save this session please" not in body
+    assert "1 exchange." in body
