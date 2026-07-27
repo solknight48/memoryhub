@@ -28,7 +28,7 @@ MAX_BODY = 4 * 1024 * 1024
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
 
 
-def _session_rows(hub: Path, c: ck.Checkpoint) -> list[dict]:
+def _session_rows(c: ck.Checkpoint) -> list[dict]:
     rows = []
     for p in c.sessions:
         text = p.read_text(encoding="utf-8", errors="replace")
@@ -49,31 +49,33 @@ def _session_rows(hub: Path, c: ck.Checkpoint) -> list[dict]:
 
 def _map(hub: Path, budget: int | None) -> dict:
     cps = ck.list_checkpoints(hub)
-    current = read_current(hub)
-    included: list[str] = []
-    omitted: list[str] = []
-    loaded: list[str] = []
-    if current and cps:
-        try:
-            result = load.build(hub, None, True, budget)
-            included = [f"{b['checkpoint']}/{b['file']}" for b in result.included]
-            omitted = list(result.omitted)
-            loaded = list(result.loaded)
-        except MhError:
-            pass
+    error = None
+    try:
+        result = load.build(hub, None, True, budget)
+        loaded, omitted = result.loaded, result.omitted
+        included = [b["id"] for b in result.included]
+    except MhError as e:
+        # Say why the next load would be empty; a greyed-out map with no
+        # explanation is the same dead end the git errors below avoid.
+        loaded, included, omitted, error = [], [], [], e.message
     return {
         "checkpoints": [
             {
                 "slug": c.slug,
                 "created": c.created,
-                "sessions": _session_rows(hub, c),
+                "sessions": _session_rows(c),
             }
             for c in cps
         ],
         "links": [list(e) for e in ck.read_links(hub)],
-        "current": current,
+        "current": read_current(hub),
         "budget": budget,
-        "load": {"loaded": loaded, "included": included, "omitted": omitted},
+        "load": {
+            "loaded": loaded,
+            "included": included,
+            "omitted": omitted,
+            "error": error,
+        },
     }
 
 
@@ -81,34 +83,19 @@ def _session(hub: Path, ckpt: str, file: str) -> dict:
     c, path = curate.resolve_session(hub, ckpt, file)
     text = path.read_text(encoding="utf-8", errors="replace")
     parsed = curate.parse(text)
-    if parsed is None:
-        return {
-            "checkpoint": c.slug,
-            "file": path.name,
-            "editable": False,
-            "reason": "not a rendered mh session",
-            "raw": text,
-            "exchanges": [],
-        }
-    if parsed.compacted:
-        reason = "compacted session — a summary, not exchanges; nothing to edit per-turn"
-    elif parsed.editable:
-        reason = None
-    else:
-        reason = "mh cannot reproduce this file byte-for-byte, so it will not rewrite it"
     return {
         "checkpoint": c.slug,
         "file": path.name,
-        "editable": parsed.editable,
-        "legacy": parsed.legacy,
-        "compacted": parsed.compacted,
-        "reason": reason,
-        "raw": text if parsed.compacted else None,
-        "source": parsed.source,
-        "session_id": parsed.session_id,
+        "editable": bool(parsed and parsed.editable),
+        "legacy": bool(parsed and parsed.legacy),
+        "compacted": bool(parsed and parsed.compacted),
+        "reason": curate.readonly_reason(parsed),
+        "raw": text if parsed is None or parsed.compacted else None,
+        "source": parsed.source if parsed else None,
+        "session_id": parsed.session_id if parsed else None,
         "exchanges": [
             {"index": i, "user": u, "agent": a}
-            for i, (u, a) in enumerate(parsed.turns, 1)
+            for i, (u, a) in enumerate(parsed.turns if parsed else [], 1)
         ],
     }
 
@@ -128,15 +115,11 @@ def dispatch(
     """Route one API call. Pure over the filesystem — no socket involved."""
     if method == "GET":
         if path == "/api/map":
-            raw = (query.get("budget") or ["6000"])[0]
+            raw = query.get("budget") or str(load.DEFAULT_BUDGET)
             budget = None if raw in ("", "none", "all") else int(raw)
             return 200, _map(hub, budget)
         if path == "/api/session":
-            ckpt, file = _need(
-                {"ckpt": (query.get("ckpt") or [""])[0], "file": (query.get("file") or [""])[0]},
-                "ckpt",
-                "file",
-            )
+            ckpt, file = _need(query, "ckpt", "file")
             return 200, _session(hub, ckpt, file)
         return 404, {"error": f"no route {path}"}
 
@@ -210,12 +193,12 @@ def make_handler(hub: Path, token: str, read_only: bool):
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
             if host not in ALLOWED_HOSTS:
                 return False
-            supplied = self.headers.get("X-Mh-Token") or (query.get("t") or [""])[0]
+            supplied = self.headers.get("X-Mh-Token") or query.get("t", "")
             return secrets.compare_digest(supplied, token)
 
         def _handle(self, method: str) -> None:
             parts = urlparse(self.path)
-            query = parse_qs(parts.query)
+            query = {k: v[0] for k, v in parse_qs(parts.query).items()}
             if not self._authorized(query):
                 self._json(403, {"error": "bad or missing token"})
                 return
@@ -241,17 +224,12 @@ def make_handler(hub: Path, token: str, read_only: bool):
             except MhError as e:
                 status, obj = 400, {"error": e.message}
             except git.GitError as e:
-                # Surface git's own words: the CLI's guard prints them, so the
-                # UI must too, or "git failed (commit)" leaves the user stuck
-                # on things like an unset user.email.
-                detail = [ln for ln in (e.stderr or "").strip().splitlines() if ln.strip()]
-                if "index.lock" in (e.stderr or ""):
-                    msg = "another mh/git process is writing to this hub; retry"
-                else:
-                    msg = f"git {e.git_args[0]} failed"
-                    if detail:
-                        msg += ": " + detail[0]
-                status, obj = 409, {"error": msg, "detail": "\n".join(detail[:8])}
+                # Surface git's own words, or an unset user.email leaves the
+                # user stuck on a bare "git failed".
+                status, obj = 409, {
+                    "error": git.explain(e),
+                    "detail": "\n".join(git.stderr_lines(e)[:8]),
+                }
             except (ValueError, KeyError) as e:
                 status, obj = 400, {"error": str(e)}
             self._json(status, obj)

@@ -10,6 +10,9 @@ from . import git
 from .hub import MhError, read_current
 
 
+DEFAULT_BUDGET = 6000  # one definition; the CLI, the API and the page share it
+
+
 def estimate_tokens(text: str) -> int:
     # Documented estimate (~4 chars/token); no tokenizer dependency.
     return max(1, len(text) // 4)
@@ -125,7 +128,8 @@ def build(
         loaded=sorted(slugs),
         expanded=expanded,
         included=[
-            {k: b[k] for k in ("checkpoint", "file", "tokens", "body")} for b in kept
+            {k: b[k] for k in ("id", "checkpoint", "file", "tokens", "body")}
+            for b in kept
         ],
         omitted=omitted,
         budget=budget,

@@ -15,6 +15,23 @@ class GitError(Exception):
         self.stderr = stderr
 
 
+LOCK_HINT = "another mh/git process is writing to this hub; retry in a moment"
+
+
+def stderr_lines(e: GitError) -> list[str]:
+    return [ln for ln in (e.stderr or "").strip().splitlines() if ln.strip()]
+
+
+def explain(e: GitError) -> str:
+    """One wording for a failed git call, so the CLI and the UI never describe
+    the same failure differently."""
+    if "index.lock" in (e.stderr or ""):
+        return LOCK_HINT
+    detail = stderr_lines(e)
+    head = f"git {e.git_args[0]} failed"
+    return f"{head}: {detail[0]}" if detail else head
+
+
 def _env() -> dict[str, str]:
     env = os.environ.copy()
     # mh-invoked git must never block on a terminal prompt (agents would hang).

@@ -274,7 +274,7 @@ def test_curation_survives_as_git_history(mh, ws, hub_project):
 
 def test_dispatch_map_and_session(mh, ws, hub_project):
     hub = _seed(mh, ws, hub_project, [("q1", "a1"), ("q2", "a2")])
-    status, data = server.dispatch(hub, "GET", "/api/map", {"budget": ["6000"]}, {}, False)
+    status, data = server.dispatch(hub, "GET", "/api/map", {"budget": "6000"}, {}, False)
     assert status == 200
     assert [c["slug"] for c in data["checkpoints"]] == ["alpha"]
     assert data["current"] == "alpha"
@@ -282,7 +282,7 @@ def test_dispatch_map_and_session(mh, ws, hub_project):
     assert row["exchanges"] == 2 and row["editable"] is True and row["tokens"] > 0
 
     status, data = server.dispatch(
-        hub, "GET", "/api/session", {"ckpt": ["alpha"], "file": [row["file"]]}, {}, False
+        hub, "GET", "/api/session", {"ckpt": "alpha", "file": row["file"]}, {}, False
     )
     assert status == 200 and len(data["exchanges"]) == 2
     assert data["exchanges"][0]["user"] == "q1"

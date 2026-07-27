@@ -17,13 +17,12 @@
   --baseline: #c3c2b7;
   --border: rgba(11, 11, 11, 0.10);
   --accent: #2a78d6;
-  --accent-soft: #cde2fb;
   --neutral-mark: #898781;
   --critical: #d03b3b;
   --good: #006300;
 }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
+  :root {
     color-scheme: dark;
     --surface-1: #1a1a19;
     --page: #0d0d0d;
@@ -34,25 +33,10 @@
     --baseline: #383835;
     --border: rgba(255, 255, 255, 0.10);
     --accent: #3987e5;
-    --accent-soft: #184f95;
     --neutral-mark: #898781;
     --critical: #d03b3b;
     --good: #0ca30c;
   }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --surface-1: #1a1a19;
-  --page: #0d0d0d;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --grid: #2c2c2a;
-  --baseline: #383835;
-  --border: rgba(255, 255, 255, 0.10);
-  --accent: #3987e5;
-  --accent-soft: #184f95;
-  --critical: #d03b3b;
-  --good: #0ca30c;
 }
 * { box-sizing: border-box; }
 body {
@@ -68,7 +52,7 @@ header {
 }
 header h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
-header .spacer { flex: 1; }
+.spacer { flex: 1; }
 main { padding: 20px; max-width: 1200px; margin: 0 auto; }
 section {
   background: var(--surface-1); border: 1px solid var(--border);
@@ -91,8 +75,7 @@ button {
 button:hover { border-color: var(--baseline); }
 button.danger { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
-input[type=text], input[type=number], textarea, select {
+input[type=number], textarea {
   font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
   border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
   width: 100%;
@@ -103,7 +86,6 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
 th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
-tr.sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .file { font-family: ui-monospace, monospace; font-size: 12px; }
@@ -190,7 +172,7 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
 <script>
 const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const $ = (id) => document.getElementById(id);
-let DATA = null, SEL_CK = null, SEL_FILE = null;
+let DATA = null, SEL_CK = null;
 
 function toast(msg, kind) {
   const t = $("toast");
@@ -210,6 +192,23 @@ async function api(path, opts) {
   return data;
 }
 const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
+
+// Every mutation is the same shape: POST, report, re-read the hub, maybe reopen a
+// pane. Written out per call site it drifted — one site had no catch at all.
+async function act(path, body, okMsg, after) {
+  try {
+    const r = await post(path, body);
+    toast(typeof okMsg === "function" ? okMsg(r) : okMsg, "ok");
+    await refresh();
+    if (after) after(r);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+// prompt over a list of choices, or a toast when there are none
+function pick(label, options, emptyMsg) {
+  if (!options.length) { toast(emptyMsg, "err"); return null; }
+  return prompt(`${label}\n\n${options.join("\n")}`, options[0]);
+}
 
 function el(tag, props, ...kids) {
   const n = document.createElement(tag);
@@ -320,7 +319,7 @@ function drawMap() {
 // --- checkpoint panel ------------------------------------------------------
 
 function selectCheckpoint(slug) {
-  SEL_CK = slug; SEL_FILE = null;
+  SEL_CK = slug;
   $("sessec").hidden = true;
   const c = DATA.checkpoints.find((x) => x.slug === slug);
   if (!c) { $("ckptsec").hidden = true; return; }
@@ -342,7 +341,7 @@ function selectCheckpoint(slug) {
     if (!s.editable && !s.compacted) nameCell.appendChild(el("span", { class: "badge warn", text: "read-only" }));
     const bar = el("div", { class: "bar" });
     bar.style.width = Math.round(70 * (s.tokens / maxTok)) + "px";
-    const tr = el("tr", { class: "clickable" + (SEL_FILE === s.file ? " sel" : "") },
+    const tr = el("tr", { class: "clickable" },
       nameCell,
       // a compacted session summarises N exchanges but stores none: "0" would read as empty
       el("td", { class: "num", text: (s.compacted || s.exchanges === null) ? "—" : String(s.exchanges) }),
@@ -361,7 +360,7 @@ function selectCheckpoint(slug) {
 // --- session panel ---------------------------------------------------------
 
 async function openSession(slug, file) {
-  SEL_CK = slug; SEL_FILE = file;
+  SEL_CK = slug;
   const data = await api(`/api/session?ckpt=${encodeURIComponent(slug)}&file=${encodeURIComponent(file)}`);
   $("sessec").hidden = false;
   $("sestitle").textContent = `${data.checkpoint} / ${data.file}` +
@@ -389,17 +388,13 @@ function exchangeCard(data, ex) {
   const card = el("div", { class: "ex" });
   const head = el("header", {},
     el("span", { class: "role", text: "exchange " + ex.index }),
-    el("span", { style: "flex:1" }));
+    el("span", { class: "spacer" }));
   if (data.editable) {
     head.appendChild(el("button", { text: "edit", onclick: () => editCard(card, data, ex) }));
-    head.appendChild(el("button", { class: "danger", text: "delete", onclick: async () => {
+    head.appendChild(el("button", { class: "danger", text: "delete", onclick: () => {
       if (!confirm(`Delete exchange ${ex.index}? The hub keeps it in git history.`)) return;
-      try {
-        await post("/api/exchange/delete", { ckpt: data.checkpoint, file: data.file, index: ex.index });
-        toast(`deleted exchange ${ex.index}`, "ok");
-        await refresh();
-        openSession(data.checkpoint, data.file);
-      } catch (e) { toast(e.message, "err"); }
+      act("/api/exchange/delete", { ckpt: data.checkpoint, file: data.file, index: ex.index },
+        `deleted exchange ${ex.index}`, () => openSession(data.checkpoint, data.file));
     } }));
   }
   card.appendChild(head);
@@ -422,87 +417,58 @@ function editCard(card, data, ex) {
   wrap.appendChild(a);
   wrap.appendChild(el("div", { class: "row end", style: "margin-top:10px" },
     el("button", { text: "cancel", onclick: () => openSession(data.checkpoint, data.file) }),
-    el("button", { class: "primary", text: "save", onclick: async () => {
-      try {
-        await post("/api/exchange/edit", { ckpt: data.checkpoint, file: data.file,
-          index: ex.index, user: u.value, agent: a.value });
-        toast(`rewrote exchange ${ex.index}`, "ok");
-        await refresh();
-        openSession(data.checkpoint, data.file);
-      } catch (e) { toast(e.message, "err"); }
-    } })));
+    el("button", { class: "primary", text: "save", onclick: () =>
+      act("/api/exchange/edit",
+        { ckpt: data.checkpoint, file: data.file, index: ex.index, user: u.value, agent: a.value },
+        `rewrote exchange ${ex.index}`, () => openSession(data.checkpoint, data.file)) })));
   card.appendChild(wrap);
 }
 
 // --- mutations -------------------------------------------------------------
 
-async function deleteSession(s) {
+const otherCheckpoints = () => DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
+
+function deleteSession(s) {
   if (!confirm(`Delete session ${s.file}? The hub keeps it in git history.`)) return;
-  try {
-    await post("/api/session/delete", { ckpt: SEL_CK, file: s.file });
-    toast("session deleted", "ok");
-    SEL_FILE = null; $("sessec").hidden = true;
-    await refresh(); selectCheckpoint(SEL_CK);
-  } catch (e) { toast(e.message, "err"); }
+  $("sessec").hidden = true;
+  act("/api/session/delete", { ckpt: SEL_CK, file: s.file }, "session deleted");
 }
 
-async function moveSession(s) {
-  const others = DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
-  if (!others.length) return toast("no other checkpoint to move into", "err");
-  const to = prompt(`Move ${s.file} to which checkpoint?\n\n${others.join("\n")}`, others[0]);
+function moveSession(s) {
+  const to = pick(`Move ${s.file} to which checkpoint?`, otherCheckpoints(),
+    "no other checkpoint to move into");
   if (!to) return;
-  try {
-    await post("/api/session/move", { ckpt: SEL_CK, file: s.file, to });
-    toast(`moved to ${to}`, "ok");
-    $("sessec").hidden = true;
-    await refresh(); selectCheckpoint(SEL_CK);
-  } catch (e) { toast(e.message, "err"); }
+  $("sessec").hidden = true;
+  act("/api/session/move", { ckpt: SEL_CK, file: s.file, to }, `moved to ${to}`);
 }
 
 function wire() {
-  $("reload").onclick = () => refresh().then(() => SEL_CK && selectCheckpoint(SEL_CK));
-  $("budget").onchange = () => refresh().then(() => SEL_CK && selectCheckpoint(SEL_CK));
-  $("newckpt").onclick = async () => {
+  $("reload").onclick = $("budget").onchange = () => refresh();
+  $("newckpt").onclick = () => {
     const name = prompt("New checkpoint name:");
-    if (!name) return;
-    try { await post("/api/checkpoint/create", { name }); toast("checkpoint created", "ok"); await refresh(); }
-    catch (e) { toast(e.message, "err"); }
+    if (name) act("/api/checkpoint/create", { name }, "checkpoint created");
   };
-  $("ck-rename").onclick = async () => {
+  $("ck-rename").onclick = () => {
     const name = prompt("Rename checkpoint to:", SEL_CK);
     if (!name || name === SEL_CK) return;
-    try {
-      const r = await post("/api/checkpoint/rename", { slug: SEL_CK, name });
-      toast(`renamed to ${r.slug}`, "ok");
-      SEL_CK = r.slug; $("sessec").hidden = true;
-      await refresh(); selectCheckpoint(SEL_CK);
-    } catch (e) { toast(e.message, "err"); }
+    $("sessec").hidden = true;
+    act("/api/checkpoint/rename", { slug: SEL_CK, name },
+      (r) => `renamed to ${r.slug}`, (r) => { SEL_CK = r.slug; selectCheckpoint(SEL_CK); });
   };
-  $("ck-delete").onclick = async () => {
+  $("ck-delete").onclick = () => {
     const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
     if (!confirm(`Delete checkpoint ${SEL_CK} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
-    try {
-      await post("/api/checkpoint/delete", { slug: SEL_CK });
-      toast("checkpoint deleted", "ok");
-      SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
-      await refresh();
-    } catch (e) { toast(e.message, "err"); }
+    SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
+    act("/api/checkpoint/delete", { slug: c.slug }, "checkpoint deleted");
   };
-  $("ck-link").onclick = async () => {
-    const others = DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
-    if (!others.length) return toast("nothing to link to", "err");
-    const b = prompt(`Link ${SEL_CK} with:\n\n${others.join("\n")}`, others[0]);
-    if (!b) return;
-    try { await post("/api/link", { a: SEL_CK, b }); toast("linked", "ok"); await refresh(); }
-    catch (e) { toast(e.message, "err"); }
+  $("ck-link").onclick = () => {
+    const b = pick(`Link ${SEL_CK} with:`, otherCheckpoints(), "nothing to link to");
+    if (b) act("/api/link", { a: SEL_CK, b }, "linked");
   };
-  $("ck-unlink").onclick = async () => {
+  $("ck-unlink").onclick = () => {
     const partners = DATA.links.filter((e) => e.includes(SEL_CK)).map((e) => (e[0] === SEL_CK ? e[1] : e[0]));
-    if (!partners.length) return toast("no links on this checkpoint", "err");
-    const b = prompt(`Unlink ${SEL_CK} from:\n\n${partners.join("\n")}`, partners[0]);
-    if (!b) return;
-    try { await post("/api/unlink", { a: SEL_CK, b }); toast("unlinked", "ok"); await refresh(); }
-    catch (e) { toast(e.message, "err"); }
+    const b = pick(`Unlink ${SEL_CK} from:`, partners, "no links on this checkpoint");
+    if (b) act("/api/unlink", { a: SEL_CK, b }, "unlinked");
   };
 }
 
@@ -510,10 +476,13 @@ async function refresh() {
   const budget = $("budget").value;
   DATA = await api("/api/map?budget=" + encodeURIComponent(budget === "" ? "none" : budget));
   $("hubpath").textContent = DATA.current ? "current: " + DATA.current : "no current checkpoint";
+  if (DATA.load.error) toast(DATA.load.error, "err");
   drawMap();
   if (SEL_CK && !DATA.checkpoints.some((c) => c.slug === SEL_CK)) {
     SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
   }
+  // an invariant of refreshing, not something each call site must remember
+  if (SEL_CK) selectCheckpoint(SEL_CK);
 }
 
 wire();

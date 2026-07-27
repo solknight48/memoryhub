@@ -46,12 +46,7 @@ def guard(fn):
         except git.GitError as e:
             if e.stderr:
                 sys.stderr.write(e.stderr)
-            if "index.lock" in e.stderr:
-                print(
-                    "mh: another mh/git process is writing to this hub; retry in a moment",
-                    file=sys.stderr,
-                )
-            die(f"git failed ({e.git_args[0]})")
+            die(git.explain(e))
 
     return wrapper
 
@@ -207,6 +202,9 @@ def save(
         if not summary:
             raise MhError(f"{file} is empty — nothing to compact")
         src, sid, key, turns, last_ts = _resolve_session(hub, session_id, transcript)
+        # count what a purified save of this session would hold, so the two
+        # representations never disagree about how many exchanges there were
+        turns = purify.drop_trailing_unanswered(turns)
         body = curate.render_compacted(summary, str(src), sid, len(turns))
         stamp = purify.stamp_for(last_ts, src)
     elif file:
@@ -451,7 +449,9 @@ def load(
         None, help="Checkpoints to load (default: current)."
     ),
     no_links: bool = typer.Option(False, "--no-links", help="Do not follow links."),
-    budget: int = typer.Option(6000, "--budget", help="Token budget (~4 chars/token)."),
+    budget: int = typer.Option(
+        loadmod.DEFAULT_BUDGET, "--budget", help="Token budget (~4 chars/token)."
+    ),
     all_: bool = typer.Option(False, "--all", help="No budget: load everything."),
     json_: bool = JSON_OPT,
 ):
@@ -538,16 +538,10 @@ def show(
     ck_ref, _, file_ref = ref.partition("/")
     c = ck.resolve(hub, ck_ref)
     if file_ref:
-        matches = [p for p in c.sessions if p.name == file_ref]
-        if not matches:
-            matches = [p for p in c.sessions if p.name.startswith(file_ref)]
-        if not matches:
-            raise MhError(f"no session '{file_ref}' in '{c.slug}'")
-        if len(matches) > 1:
-            raise MhError("ambiguous session: " + ", ".join(p.name for p in matches))
-        body = matches[0].read_text(encoding="utf-8", errors="replace")
+        c, session = curate.resolve_session(hub, ck_ref, file_ref)
+        body = session.read_text(encoding="utf-8", errors="replace")
         if json_:
-            _emit_json({"checkpoint": c.slug, "file": matches[0].name, "body": body})
+            _emit_json({"checkpoint": c.slug, "file": session.name, "body": body})
         else:
             sys.stdout.write(body)
         return
@@ -753,7 +747,7 @@ def ui(
     from . import server
 
     hub = _hub()
-    if host not in ("127.0.0.1", "localhost", "::1"):
+    if host not in server.ALLOWED_HOSTS:
         print(
             f"mh: binding {host} exposes this hub — it can be edited by anyone who "
             "reaches the port and learns the token",

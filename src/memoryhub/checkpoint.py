@@ -128,16 +128,26 @@ def save_session(hub: Path, ckpt: Checkpoint, body: str, key: str, stamp: str) -
     return fname
 
 
+def session_key(filename: str) -> str | None:
+    """The identity key inside `<stamp>_<key>.md`, or None if the name does not
+    follow the convention. Sole decoder of the session filename grammar."""
+    if not filename.endswith(".md"):
+        return None
+    name = filename[:-3]
+    if len(name) > 16 and STAMP_RE.match(name[:15]) and name[15] == "_":
+        return name[16:]
+    return None
+
+
 def existing_keys(hub: Path) -> set[str]:
     """Session identity keys already present anywhere in the hub (for import
     dedup: a session saved once is never imported again)."""
-    keys: set[str] = set()
-    for c in list_checkpoints(hub):
-        for p in c.sessions:
-            name = p.name[:-3]  # strip .md
-            if len(name) > 16 and STAMP_RE.match(name[:15]) and name[15] == "_":
-                keys.add(name[16:])
-    return keys
+    return {
+        key
+        for c in list_checkpoints(hub)
+        for p in c.sessions
+        if (key := session_key(p.name))
+    }
 
 
 # --- links -------------------------------------------------------------------

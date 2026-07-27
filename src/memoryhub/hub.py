@@ -106,6 +106,10 @@ def write_current(hub: Path, slug: str) -> None:
     (hub / "current").write_text(slug + "\n")
 
 
+def clear_current(hub: Path) -> None:
+    (hub / "current").unlink(missing_ok=True)
+
+
 @dataclass
 class InitResult:
     hub: Path

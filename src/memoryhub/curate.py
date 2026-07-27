@@ -8,9 +8,9 @@ re-render must equal the original byte-for-byte, or the session is read-only.
 That guard is what makes editing safe in the presence of dialog that quotes
 mh's own output (a session *about* MemoryHub certainly will).
 
-Re-rendering goes through purify.render, so the format keeps exactly one
-producer. Sessions still in the legacy Q&A shape parse and round-trip against a
-copy of the old renderer, and are migrated to User/Agent on first edit.
+Three document shapes exist: the current User/Agent dialog (rendered by
+purify.render), the legacy Q&A shape kept only so old files round-trip, and a
+compacted summary. Each is verified by re-rendering, never by assertion.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 from . import checkpoint as ck
 from . import git, purify
-from .hub import MhError, read_current, write_current
+from .hub import MhError, clear_current, read_current, write_current
 
 PREAMBLE_RE = re.compile(
     r"_Pure dialog extracted from `(?P<src>[^`]*)`"
@@ -52,12 +52,26 @@ class ParsedSession:
     legacy: bool
     round_trip: bool
     compacted: bool = False
+    summary: str = ""  # the compacted payload; empty for dialog sessions
+    exchanges: int = 0  # the count a compacted preamble records
 
     @property
     def editable(self) -> bool:
         # A summary has no exchanges to operate on; per-turn surgery is
         # meaningless, so it is deliberately read-only rather than unsupported.
         return self.round_trip and not self.compacted
+
+
+def readonly_reason(parsed: ParsedSession | None) -> str | None:
+    """Why this session cannot be edited, or None if it can. One policy, so the
+    CLI error and the UI badge can never explain the same file differently."""
+    if parsed is None:
+        return "not a rendered mh session"
+    if parsed.compacted:
+        return "compacted session — a summary, not exchanges; nothing to edit per-turn"
+    if not parsed.round_trip:
+        return "mh cannot reproduce this file byte-for-byte, so it will not rewrite it"
+    return None
 
 
 def render_compacted(
@@ -91,8 +105,8 @@ def ensure_committable(hub: Path) -> None:
     try:
         git.run(hub, "var", "GIT_AUTHOR_IDENT")
     except git.GitError as e:
-        first = ((e.stderr or "").strip().splitlines() or ["unknown error"])[0]
-        raise MhError(f"git cannot commit in this hub: {first}") from None
+        detail = git.stderr_lines(e) or ["unknown error"]
+        raise MhError(f"git cannot commit in this hub: {detail[0]}") from None
 
 
 def _render_qa(turns: list[tuple[str, str]], source: str, sid: str | None) -> str:
@@ -150,31 +164,45 @@ def _structural(
     splitting it.
     """
     roles = ("Q", "A") if legacy else ("User", "Agent")
-    want_role, want_idx = roles[0], 1
     out = []
     for line, role, idx in heads:
-        if role != want_role or idx != want_idx:
-            continue
-        out.append((line, role, idx))
-        if want_role == roles[0]:
-            want_role = roles[1]
-        else:
-            want_role, want_idx = roles[0], want_idx + 1
+        # the k-th genuine heading is always roles[k % 2], numbered k // 2 + 1
+        if (role, idx) == (roles[len(out) % 2], len(out) // 2 + 1):
+            out.append((line, role, idx))
     return out
+
+
+def _parse_compacted(text: str) -> ParsedSession | None:
+    """A compacted session, but only if re-rendering reproduces the file.
+
+    Verified, never asserted: a *dialog* session that merely quotes a compacted
+    preamble matches the regex too, and claiming it is a summary would hide its
+    real exchanges behind a read-only badge. Failing the check here lets it fall
+    through to the dialog parser, which is what it actually is.
+    """
+    m = COMPACT_PREAMBLE_RE.search(text)
+    if not m:
+        return None
+    body = text[text.index("\n", m.end()) :].strip() if "\n" in text[m.end() :] else ""
+    parsed = ParsedSession(
+        source=m.group("src"),
+        session_id=m.group("sid"),
+        turns=[],
+        legacy=False,
+        round_trip=False,
+        compacted=True,
+        summary=body,
+        exchanges=int(m.group("n")),
+    )
+    parsed.round_trip = _render_as_parsed(parsed) == text
+    return parsed if parsed.round_trip else None
 
 
 def parse(text: str) -> ParsedSession | None:
     """Exchanges of a rendered session, or None if this is not one of ours."""
-    c = COMPACT_PREAMBLE_RE.search(text)
-    if c:
-        return ParsedSession(
-            source=c.group("src"),
-            session_id=c.group("sid"),
-            turns=[],
-            legacy=False,
-            round_trip=True,  # recognised and well-formed; just not per-turn editable
-            compacted=True,
-        )
+    compacted = _parse_compacted(text)
+    if compacted:
+        return compacted
     m = PREAMBLE_RE.search(text)
     if not m:
         return None
@@ -206,14 +234,29 @@ def parse(text: str) -> ParsedSession | None:
         legacy=legacy,
         round_trip=False,
     )
-    parsed.round_trip = render(parsed, migrate=False) == text
+    parsed.round_trip = _render_as_parsed(parsed) == text
     return parsed
 
 
-def render(parsed: ParsedSession, migrate: bool = True) -> str:
-    """Re-render. migrate=True always writes the current User/Agent format."""
-    if parsed.legacy and not migrate:
+def _render_as_parsed(parsed: ParsedSession) -> str:
+    """Re-render in the shape it was parsed from — this is the round-trip check."""
+    if parsed.compacted:
+        return render_compacted(
+            parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
+        )
+    if parsed.legacy:
         return _render_qa(parsed.turns, parsed.source, parsed.session_id)
+    return purify.render(parsed.turns, parsed.source, parsed.session_id)
+
+
+def render(parsed: ParsedSession) -> str:
+    """Canonical form for writing: dialog is migrated to the current format, and
+    a compacted session stays compacted rather than being flattened to zero
+    exchanges."""
+    if parsed.compacted:
+        return render_compacted(
+            parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
+        )
     return purify.render(parsed.turns, parsed.source, parsed.session_id)
 
 
@@ -232,19 +275,16 @@ def resolve_session(hub: Path, ckpt_ref: str, file_ref: str) -> tuple[ck.Checkpo
     return c, matches[0]
 
 
-def _load(hub: Path, ckpt_ref: str, file_ref: str) -> tuple[ck.Checkpoint, Path, ParsedSession]:
+def _load(
+    hub: Path, ckpt_ref: str, file_ref: str, index: int | None = None
+) -> tuple[ck.Checkpoint, Path, ParsedSession]:
     c, path = resolve_session(hub, ckpt_ref, file_ref)
     parsed = parse(path.read_text(encoding="utf-8", errors="replace"))
-    if parsed is None:
-        raise MhError(
-            f"{c.slug}/{path.name} is not a rendered mh session — read-only "
-            "(edit it with git if you know what you are doing)"
-        )
-    if not parsed.editable:
-        raise MhError(
-            f"{c.slug}/{path.name} does not round-trip: mh cannot reproduce it "
-            "byte-for-byte, so it refuses to rewrite it. Read-only."
-        )
+    reason = readonly_reason(parsed)
+    if reason:
+        raise MhError(f"{c.slug}/{path.name} is read-only: {reason}")
+    if index is not None and not 1 <= index <= len(parsed.turns):
+        raise MhError(f"no exchange {index} in {c.slug}/{path.name}")
     return c, path, parsed
 
 
@@ -258,9 +298,7 @@ def _write(path: Path, parsed: ParsedSession) -> None:
 def delete_exchange(hub: Path, ckpt_ref: str, file_ref: str, index: int) -> dict:
     """Drop one exchange (1-based). Remaining turns are renumbered by render."""
     ensure_committable(hub)
-    c, path, parsed = _load(hub, ckpt_ref, file_ref)
-    if not 1 <= index <= len(parsed.turns):
-        raise MhError(f"no exchange {index} in {c.slug}/{path.name}")
+    c, path, parsed = _load(hub, ckpt_ref, file_ref, index)
     if len(parsed.turns) == 1:
         raise MhError(
             "that is the session's only exchange; delete the session instead"
@@ -281,9 +319,7 @@ def edit_exchange(
 ) -> dict:
     """Rewrite one side or both of an exchange (1-based)."""
     ensure_committable(hub)
-    c, path, parsed = _load(hub, ckpt_ref, file_ref)
-    if not 1 <= index <= len(parsed.turns):
-        raise MhError(f"no exchange {index} in {c.slug}/{path.name}")
+    c, path, parsed = _load(hub, ckpt_ref, file_ref, index)
     old_user, old_agent = parsed.turns[index - 1]
     new_user = old_user if user is None else user.strip()
     new_agent = old_agent if agent is None else agent.strip()
@@ -320,8 +356,8 @@ def move_session(hub: Path, ckpt_ref: str, file_ref: str, to_ref: str) -> dict:
         raise MhError(f"'{target.slug}' already holds {path.name}")
     # One file per session key per checkpoint — a same-session file under a
     # different timestamp would silently duplicate the session.
-    key = path.name[16:-3] if len(path.name) > 19 else path.stem
-    clash = [p for p in target.sessions if p.name.endswith(f"_{key}.md")]
+    key = ck.session_key(path.name)
+    clash = [p for p in target.sessions if key and ck.session_key(p.name) == key]
     if clash:
         raise MhError(
             f"'{target.slug}' already holds this session as {clash[0].name}"
@@ -372,7 +408,7 @@ def delete_checkpoint(hub: Path, ref: str) -> dict:
         if remaining:
             write_current(hub, remaining[-1].slug)
         else:
-            (hub / "current").unlink(missing_ok=True)
+            clear_current(hub)
     git.auto_commit(hub, f"curate: delete checkpoint {c.slug} ({sessions} sessions)")
     return {
         "slug": c.slug,
