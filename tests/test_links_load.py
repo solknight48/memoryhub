@@ -146,15 +146,15 @@ def test_load_golden_output(mh, ws, hub_project):
 
 <!-- mh session: solo/2026-07-10_0401_e5f6a7b8.md -->
 
-# Session Context — Q&A
+# Session Context
 
-_Pure dialog extracted from `{sid}.jsonl` (session `{sid}`). **Q** = user, **A** = assistant. 1 exchange. Tool calls, results, and internal reasoning removed._
+_Pure dialog extracted from `{sid}.jsonl` (session `{sid}`). 1 exchange. Tool calls, results, and internal reasoning removed._
 
-## Q1
+## User 1
 
 hello
 
-## A1
+## Agent 1
 
 world
 """

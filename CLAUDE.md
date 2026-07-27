@@ -6,3 +6,4 @@
 - Local install: `uv tool install -e .`
 - Layout: `src/memoryhub/{cli,hub,git,purify,checkpoint,load}.py`; skill ships as package data in `src/memoryhub/skill/`
 - `purify.py` is vendored from `~/.claude/skills/purify-context/purify.py` — keep extraction semantics identical (the parity test in `tests/test_purify.py` pins this)
+- Presentation deliberately diverges: `render()` emits `## User N` / `## Agent N` where the original emits `## QN` / `## AN`. The parity test stays byte-for-byte by relabelling the original's output via `as_mh_format()`; extend that helper, don't weaken the assertion, if rendering changes again

@@ -43,7 +43,7 @@ def test_save_from_transcript(mh, ws, hub_project):
     assert len(files) == 1
     assert files[0].name == "2026-07-10_0401_a1b2c3d4.md"
     body = files[0].read_text()
-    assert "## Q1" in body and "hello" in body and "world" in body
+    assert "## User 1" in body and "hello" in body and "world" in body
 
 
 def test_save_project_scoped_fallback(mh, ws, hub_project):

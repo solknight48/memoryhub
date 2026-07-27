@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -148,7 +149,7 @@ def test_junk_filtered_and_timestamp_from_last_record(mh, ws, hub_project):
     body = saved.read_text()
     assert "first q" in body and "first a" in body
     assert "real question" in body and "tail" in body and "real answer" in body
-    assert "## Q2" in body
+    assert "## User 2" in body
     for absent in (
         "<system-reminder>",
         "reminder noise",
@@ -161,6 +162,22 @@ def test_junk_filtered_and_timestamp_from_last_record(mh, ws, hub_project):
         assert absent not in body
     # filename timestamp = last record's timestamp (04:21 UTC)
     assert saved.name == f"2026-07-10_0421_{SID[:8]}.md"
+
+
+def as_mh_format(original_md: str) -> str:
+    """The original script's Q&A rendering, relabelled to mh's User/Agent one.
+
+    These four substitutions are the ONLY intended divergence from the original,
+    so parity below stays byte-for-byte: any other drift, in extraction or in
+    rendering, still fails the test. Caveat for future fixtures: a dialog line
+    that is itself a `## Q<n>` heading would be relabelled here but not by
+    render(), so keep such content out of the parity fixture.
+    """
+    md = original_md.replace("# Session Context — Q&A", "# Session Context").replace(
+        "**Q** = user, **A** = assistant. ", ""
+    )
+    md = re.sub(r"^## Q(\d+)$", r"## User \1", md, flags=re.M)
+    return re.sub(r"^## A(\d+)$", r"## Agent \1", md, flags=re.M)
 
 
 @pytest.mark.skipif(not ORIG.is_file(), reason="original purify.py not on this machine")
@@ -181,7 +198,7 @@ def test_parity_with_original_script(ws, tmp_path):
     )
     turns, _ = vendored.build_turns(tr)
     turns = vendored.drop_trailing_unanswered(turns)
-    assert vendored.render(turns, str(tr), None) == out.read_text()
+    assert vendored.render(turns, str(tr), None) == as_mh_format(out.read_text())
 
 
 def test_trailing_unanswered_dropped(mh, ws, hub_project):

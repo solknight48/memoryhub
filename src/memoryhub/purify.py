@@ -1,10 +1,11 @@
-"""Purify Claude Code session transcripts into Q&A markdown.
+"""Purify Claude Code session transcripts into User/Agent dialog markdown.
 
 Vendored and adapted from ~/.claude/skills/purify-context/purify.py so the
 installed tool is self-contained. Extraction semantics are identical (a parity
 test pins this); mh-specific differences: turns are returned in-memory instead
-of written to a file, and project-wide transcript discovery lives in agents.py
-(all agents, never another project's sessions).
+of written to a file, project-wide transcript discovery lives in agents.py
+(all agents, never another project's sessions), and render() labels turns
+User/Agent where the original emits Q/A.
 """
 
 from __future__ import annotations
@@ -162,17 +163,18 @@ def render(turns: list[tuple[str, str]], source: str, session_id: str | None) ->
     src = os.path.basename(source)
     prov = f"`{src}`" + (f" (session `{session_id}`)" if session_id else "")
     lines = [
-        "# Session Context — Q&A",
+        "# Session Context",
         "",
-        f"_Pure dialog extracted from {prov}. **Q** = user, **A** = assistant. "
+        f"_Pure dialog extracted from {prov}. "
         f"{n} exchange{'' if n == 1 else 's'}. Tool calls, results, and internal "
         "reasoning removed._",
         "",
     ]
     blocks = []
-    for i, (q, a) in enumerate(turns, 1):
-        blocks.append(f"## Q{i}\n\n{q}\n")
-        blocks.append(f"## A{i}\n\n{a if a else '_(no textual reply captured)_'}\n")
+    for i, (user, agent) in enumerate(turns, 1):
+        reply = agent if agent else "_(no textual reply captured)_"
+        blocks.append(f"## User {i}\n\n{user}\n")
+        blocks.append(f"## Agent {i}\n\n{reply}\n")
         blocks.append("---\n")
     if blocks:
         blocks.pop()  # no trailing separator

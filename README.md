@@ -3,7 +3,7 @@
 Git-like checkpoints for AI session context.
 
 Every Claude Code session starts from zero. MemoryHub fixes that: when a session
-ends, `mh save` **purifies** it (pure Q&A markdown — tool calls, thinking, and
+ends, `mh save` **purifies** it (pure User/Agent dialog — tool calls, thinking, and
 harness noise stripped, mechanically, no LLM cost) and stores it into a
 **checkpoint**. A checkpoint is a sub-hub: a named container of purified
 sessions. Checkpoints are **independent** by default; **link** two and they
@@ -25,11 +25,15 @@ the project's memory back.
 ## Install
 
 ```sh
-uv tool install .          # or:  uv tool install -e .  (hackable)
+uv tool install git+https://github.com/solknight48/memoryhub
 mh skill install           # teach Claude Code sessions the workflow
 ```
 
-Assumes macOS, git ≥ 2.32, Python ≥ 3.12.
+Or from a clone, `uv tool install .` (add `-e` to keep it hackable).
+
+**Requirements**: Linux or macOS, git ≥ 2.32, Python ≥ 3.12. `mh` shells out to
+the system `git` and touches nothing platform-specific; the test suite runs on
+both. Windows is untested.
 
 ## Quickstart
 
@@ -73,6 +77,66 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh hubs [--prune]` | All registered hubs. |
 | `mh skill install` | Install the Claude Code skill. |
 
+## What `mh save` actually does
+
+One deterministic pass — no LLM call, no network:
+
+1. **Resolve the target checkpoint** — `--to CKPT` (exact slug, unique prefix, or
+   1-based index from `mh list`), otherwise the `current` pointer. No current
+   checkpoint and no `--to` is an error, never a silent default.
+2. **Find the transcript**, first match wins: `--transcript PATH` (schema
+   auto-detected) → `--session-id ID` or `$CLAUDE_CODE_SESSION_ID`, globbed
+   across `~/.claude/projects/*/` → otherwise this project's newest transcript
+   across all agents, since a live session is always its own newest.
+   (`--file MD` skips steps 2–5 and stores markdown you supply verbatim.)
+3. **Pair the dialog** — walk the JSONL in order, pairing each user turn with the
+   assistant text that follows it. Consecutive unanswered user messages merge
+   into one **User** turn; assistant text before any question is ignored.
+4. **Strip everything that isn't dialog** — mechanically, by rule:
+   - assistant **thinking blocks, tool calls, and tool results** — only
+     `type: "text"` content blocks survive;
+   - **subagent traffic** and meta records (`isSidechain`, `isMeta`);
+   - `<system-reminder>…</system-reminder>` blocks, anywhere in a message;
+   - harness wrappers whose message *starts* with `<command-name>`,
+     `<command-args>`, `<local-command-stdout>`, `<bash-input>`,
+     `<bash-stdout>`, `<user-prompt-submit-hook>`, and friends — matched at the
+     start only, so a genuine question that merely mentions a tag survives;
+   - turns cancelled by `[Request interrupted by user` / `[Request cancelled`.
+5. **Drop the trailing unanswered turn** — the "save this session" request that
+   triggered the run never lands in the record. (`mh import` keeps it: archival
+   imports preserve the full history.) Nothing left after this is an error, so
+   an empty session never becomes an empty file.
+6. **Write `<end-time>_<key>.md`** into the checkpoint directory. The timestamp
+   is the session's **end** time — the last record's timestamp in local time,
+   falling back to the transcript's mtime — so time-merged loading reflects when
+   work actually happened, even for sessions saved late. The key is the session's
+   identity: `7aee4e68` (Claude, first 8 of the uuid), `pi-…`, or `cx-…`. **Any
+   existing file with the same key in that checkpoint is deleted first** —
+   re-saving a session replaces it and moves it to its new end time; it never
+   duplicates.
+7. **Commit** — `git add -A` and `save: <file> -> <checkpoint>` in the hub. A
+   save that changed nothing commits nothing.
+
+The rendered file is `# Session Context`: a provenance line naming the source
+transcript, session id, and exchange count, then `## User 1` / `## Agent 1`
+pairs separated by `---`. An answered-but-silent turn renders as
+`_(no textual reply captured)_`.
+
+```markdown
+# Session Context
+
+_Pure dialog extracted from `7aee4e68-….jsonl` (session `7aee4e68-…`). 12
+exchanges. Tool calls, results, and internal reasoning removed._
+
+## User 1
+
+I want to build a memory management extension for terminal use.
+
+## Agent 1
+
+A "git for context" — nice concept. Let me take a quick look …
+```
+
 ## Taking over a project with existing history
 
 ```console
@@ -110,13 +174,8 @@ one discover function + one extract function in `src/memoryhub/agents.py`.
   expands across links (connected component), and emits whole sessions oldest →
   newest within `--budget` (default ~6000 tokens; selection keeps the newest
   contiguous suffix, the omission footer names what was cut).
-- **Session identity**: one file per session per checkpoint. Re-saving the same
-  session replaces its file — never duplicates. Filenames carry the session's
-  *end time*, so merged ordering reflects when work actually happened.
-- **`mh save` works from any agent**: inside Claude Code it resolves the live
-  session via `$CLAUDE_CODE_SESSION_ID`; elsewhere (pi, codex, plain shell) it
-  takes the project's newest transcript across all agents — a live session is
-  always its own newest. `--transcript` auto-detects the file's schema.
+- **Saving** is detailed above: one file per session per checkpoint, keyed by
+  session identity and stamped with the session's end time.
 - **Walking** moves only the untracked `current` pointer; nothing is checked
   out, all checkpoints stay on disk.
 - **Every mutation is a git commit** in the hub (`mh log`). Undo, surgery,
@@ -135,5 +194,12 @@ one discover function + one extract function in `src/memoryhub/agents.py`.
 ## Development
 
 ```sh
+git clone https://github.com/solknight48/memoryhub
+cd memoryhub
 uv run pytest        # full E2E suite (subprocess CLI in a hermetic HOME)
 ```
+
+Layout: `src/memoryhub/{cli,hub,git,purify,checkpoint,load,agents}.py`; the
+Claude Code skill ships as package data in `src/memoryhub/skill/`. `purify.py`
+is vendored from the `purify-context` skill — a parity test pins extraction
+semantics to it, and skips when that skill isn't present on the machine.
