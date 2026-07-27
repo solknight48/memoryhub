@@ -273,3 +273,7 @@ the Claude Code skill and the `mh ui` page ship as package data in
 - `server.py` is stdlib-only on purpose, so `typer` stays the single runtime
   dependency; its `dispatch()` is a plain function, so the API is tested without
   a socket.
+
+## License
+
+[MIT](LICENSE).

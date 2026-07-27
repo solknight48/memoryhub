@@ -3,6 +3,8 @@ name = "memoryhub"
 version = "0.1.0"
 description = "mh — git-like checkpoints for purified AI session context"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["typer"]
 
 [project.scripts]

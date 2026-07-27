@@ -248,3 +248,7 @@ Claude Code skill 与 `mh ui` 页面作为包数据放在 `src/memoryhub/{skill,
   文件），并且绝不能改写那些"解析 → 重新渲染"无法逐字节还原的文件。
 - `server.py` 刻意只用标准库，好让 `typer` 保持为唯一的运行时依赖；它的 `dispatch()`
   是一个普通函数，因此测试 API 不需要真的开 socket。
+
+## 许可证
+
+[MIT](LICENSE)。
