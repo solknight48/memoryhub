@@ -704,6 +704,29 @@ def hubs(
         print(p + ("" if ok else "  (missing)"))
 
 
+@app.command()
+@guard
+def ui(
+    port: int = typer.Option(7777, "--port", help="Port to bind (0 picks a free one)."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    browser: bool = typer.Option(True, "--browser/--no-browser", help="Open a browser."),
+    read_only: bool = typer.Option(
+        False, "--read-only", help="Serve the map without any editing."
+    ),
+):
+    """Open the checkpoint map: visualize the hub and curate it in a browser."""
+    from . import server
+
+    hub = _hub()
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        print(
+            f"mh: binding {host} exposes this hub — it can be edited by anyone who "
+            "reaches the port and learns the token",
+            file=sys.stderr,
+        )
+    server.serve(hub, host=host, port=port, open_browser=browser, read_only=read_only)
+
+
 @skill_app.command("install")
 @guard
 def skill_install():

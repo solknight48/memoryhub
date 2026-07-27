@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>mh — checkpoint map</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --accent: #2a78d6;
+  --accent-soft: #cde2fb;
+  --neutral-mark: #898781;
+  --critical: #d03b3b;
+  --good: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --accent-soft: #184f95;
+    --neutral-mark: #898781;
+    --critical: #d03b3b;
+    --good: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --accent-soft: #184f95;
+  --critical: #d03b3b;
+  --good: #0ca30c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+header .spacer { flex: 1; }
+main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+section {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-bottom: 20px;
+}
+h2 { font-size: 13px; margin: 0 0 12px; font-weight: 650; color: var(--text-secondary);
+     text-transform: uppercase; letter-spacing: 0.04em; }
+.mapwrap { overflow-x: auto; }
+svg { display: block; }
+svg text { font: 11px system-ui, sans-serif; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px;
+          font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+button {
+  font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface-1);
+  color: var(--text-primary); cursor: pointer;
+}
+button:hover { border-color: var(--baseline); }
+button.danger { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+input[type=text], input[type=number], textarea, select {
+  font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+  width: 100%;
+}
+textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+           line-height: 1.55; resize: vertical; min-height: 90px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.file { font-family: ui-monospace, monospace; font-size: 12px; }
+.bar { height: 6px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+.badge { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 999px;
+         border: 1px solid var(--border); color: var(--text-secondary); margin-left: 6px; }
+.badge.warn { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
+.ex { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.ex header { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+             background: var(--page); border: 0; border-bottom: 1px solid var(--border); }
+.ex .role { font-size: 11px; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); }
+.ex .body { padding: 10px 12px; white-space: pre-wrap; word-wrap: break-word;
+            font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; }
+.ex .body.agent { border-top: 1px solid var(--grid); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row.end { justify-content: flex-end; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); padding: 8px 0; font-style: italic; }
+#toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  padding: 9px 16px; border-radius: 8px; font-size: 13px; color: #fff;
+  background: #333; opacity: 0; pointer-events: none; transition: opacity .18s; max-width: 90vw;
+}
+#toast.show { opacity: 1; }
+#toast.err { background: var(--critical); }
+#toast.ok { background: var(--good); }
+#tip {
+  position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+  background: var(--surface-1); border: 1px solid var(--baseline); border-radius: 6px;
+  padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 9;
+}
+#tip.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>mh — checkpoint map</h1>
+  <span class="hub" id="hubpath"></span>
+  <span class="spacer"></span>
+  <label class="muted" style="font-size:12px">budget
+    <input type="number" id="budget" value="6000" min="0" step="500"
+           style="width:90px;display:inline-block;margin-left:6px">
+  </label>
+  <button id="newckpt">+ checkpoint</button>
+  <button id="reload">refresh</button>
+</header>
+
+<main>
+  <section>
+    <h2>Timeline</h2>
+    <div class="mapwrap"><svg id="map" role="img" aria-label="Checkpoint timeline"></svg></div>
+    <div class="legend">
+      <span><i class="key" style="background:var(--accent)"></i> in the next <code>mh load</code></span>
+      <span><i class="key" style="background:var(--neutral-mark)"></i> not loaded</span>
+      <span><i class="key" style="background:transparent;border:2px solid var(--text-primary)"></i> current pointer</span>
+      <span class="muted">arc = link (loads together) · node size = sessions</span>
+    </div>
+  </section>
+
+  <section id="ckptsec" hidden>
+    <h2 id="ckpttitle"></h2>
+    <div class="row" style="margin-bottom:12px">
+      <button id="ck-rename">rename</button>
+      <button id="ck-link">link to…</button>
+      <button id="ck-unlink">unlink…</button>
+      <span class="spacer" style="flex:1"></span>
+      <button id="ck-delete" class="danger">delete checkpoint</button>
+    </div>
+    <table>
+      <thead><tr><th>session</th><th class="num">exch.</th><th class="num">~tokens</th><th style="width:90px"></th><th style="width:150px"></th></tr></thead>
+      <tbody id="sessions"></tbody>
+    </table>
+  </section>
+
+  <section id="sessec" hidden>
+    <h2 id="sestitle"></h2>
+    <div id="exchanges"></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div id="tip"></div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const $ = (id) => document.getElementById(id);
+let DATA = null, SEL_CK = null, SEL_FILE = null;
+
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show " + (kind || "");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => (t.className = ""), 3200);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "X-Mh-Token": TOKEN, "Content-Type": "application/json" },
+  });
+  const data = await res.json().catch(() => ({ error: "bad response" }));
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
+
+function el(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;      // all user data goes through here
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) n.setAttribute(k, v);
+  }
+  for (const kid of kids) if (kid) n.appendChild(kid);
+  return n;
+}
+const svg = (tag, props) => {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "text") n.textContent = v; else n.setAttribute(k, v);
+  }
+  return n;
+};
+
+function tip(evt, lines) {
+  const t = $("tip");
+  t.textContent = "";
+  lines.forEach((l) => t.appendChild(el("div", { text: l })));
+  t.className = "show";
+  const pad = 14;
+  t.style.left = Math.min(evt.clientX + pad, innerWidth - t.offsetWidth - 8) + "px";
+  t.style.top = Math.max(8, evt.clientY - t.offsetHeight - pad) + "px";
+}
+const untip = () => ($("tip").className = "");
+
+// --- the map ---------------------------------------------------------------
+
+function drawMap() {
+  const host = $("map");
+  host.textContent = "";
+  const cps = DATA.checkpoints;
+  if (!cps.length) {
+    host.setAttribute("height", 40);
+    host.appendChild(svg("text", { x: 4, y: 22, fill: "var(--muted)",
+      text: "no checkpoints yet — create one to begin" }));
+    return;
+  }
+  const loadedSet = new Set(DATA.load.loaded);
+  const inPack = new Set(DATA.load.included.map((id) => id.split("/")[0]));
+  const step = Math.max(120, Math.min(200, 900 / cps.length));
+  const padX = 60, arcRoom = 26 + Math.min(cps.length, 6) * 11;
+  const W = padX * 2 + step * (cps.length - 1);
+  const axisY = arcRoom + 46, H = axisY + 78;
+  host.setAttribute("width", Math.max(W, 320));
+  host.setAttribute("height", H);
+
+  const x = (i) => padX + i * step;
+  const idx = new Map(cps.map((c, i) => [c.slug, i]));
+  const maxSessions = Math.max(1, ...cps.map((c) => c.sessions.length));
+  const r = (c) => 8 + 12 * Math.sqrt(c.sessions.length / maxSessions);
+
+  host.appendChild(svg("line", { x1: padX - 30, y1: axisY, x2: W - padX + 30, y2: axisY,
+    stroke: "var(--baseline)", "stroke-width": 2 }));
+
+  // link arcs, drawn first so nodes sit above them
+  DATA.links.forEach(([a, b], k) => {
+    if (!idx.has(a) || !idx.has(b)) return;
+    const i = idx.get(a), j = idx.get(b);
+    const x1 = x(Math.min(i, j)), x2 = x(Math.max(i, j));
+    const lift = 22 + 11 * (k % 6);
+    const path = svg("path", {
+      d: `M ${x1} ${axisY - 12} Q ${(x1 + x2) / 2} ${axisY - 12 - lift * 2} ${x2} ${axisY - 12}`,
+      fill: "none", stroke: "var(--accent)", "stroke-width": 2, opacity: 0.55,
+    });
+    path.addEventListener("mousemove", (e) => tip(e, [`link: ${a} — ${b}`, "these load together"]));
+    path.addEventListener("mouseleave", untip);
+    host.appendChild(path);
+  });
+
+  cps.forEach((c, i) => {
+    const active = inPack.has(c.slug) || (loadedSet.has(c.slug) && DATA.load.included.length === 0);
+    const g = svg("g", { style: "cursor:pointer" });
+    // generous hit target, independent of mark size
+    g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: 26, fill: "transparent" }));
+    g.appendChild(svg("circle", {
+      cx: x(i), cy: axisY, r: r(c),
+      fill: active ? "var(--accent)" : "var(--neutral-mark)",
+      stroke: "var(--surface-1)", "stroke-width": 2,
+    }));
+    if (c.slug === DATA.current) {
+      g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: r(c) + 5, fill: "none",
+        stroke: "var(--text-primary)", "stroke-width": 2 }));
+      g.appendChild(svg("text", { x: x(i), y: axisY + r(c) + 34, "text-anchor": "middle",
+        fill: "var(--text-primary)", "font-weight": "650", text: "current" }));
+    }
+    g.appendChild(svg("text", { x: x(i), y: axisY + r(c) + 20, "text-anchor": "middle",
+      fill: "var(--text-primary)", "font-weight": "600", text: c.slug }));
+    g.appendChild(svg("text", { x: x(i), y: axisY - r(c) - 10, "text-anchor": "middle",
+      fill: "var(--muted)", text: c.created.slice(0, 10) }));
+    const toks = c.sessions.reduce((s, x) => s + x.tokens, 0);
+    g.addEventListener("mousemove", (e) => tip(e, [
+      c.slug,
+      `${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"} · ~${toks} tokens`,
+      active ? "included in the next mh load" : "not in the next mh load",
+    ]));
+    g.addEventListener("mouseleave", untip);
+    g.addEventListener("click", () => selectCheckpoint(c.slug));
+    host.appendChild(g);
+  });
+}
+
+// --- checkpoint panel ------------------------------------------------------
+
+function selectCheckpoint(slug) {
+  SEL_CK = slug; SEL_FILE = null;
+  $("sessec").hidden = true;
+  const c = DATA.checkpoints.find((x) => x.slug === slug);
+  if (!c) { $("ckptsec").hidden = true; return; }
+  $("ckptsec").hidden = false;
+  $("ckpttitle").textContent = `${c.slug} · created ${c.created.replace("_", " ")}`;
+  const omitted = new Set(DATA.load.omitted);
+  const tbody = $("sessions");
+  tbody.textContent = "";
+  if (!c.sessions.length) {
+    tbody.appendChild(el("tr", {}, el("td", { colspan: 5, class: "empty",
+      text: "no sessions in this checkpoint yet" })));
+  }
+  const maxTok = Math.max(1, ...c.sessions.map((s) => s.tokens));
+  c.sessions.forEach((s) => {
+    const nameCell = el("td", {}, el("span", { class: "file", text: s.file }));
+    if (omitted.has(s.id)) nameCell.appendChild(el("span", { class: "badge", text: "over budget" }));
+    if (s.legacy) nameCell.appendChild(el("span", { class: "badge", text: "Q&A format" }));
+    if (!s.editable) nameCell.appendChild(el("span", { class: "badge warn", text: "read-only" }));
+    const bar = el("div", { class: "bar" });
+    bar.style.width = Math.round(70 * (s.tokens / maxTok)) + "px";
+    const tr = el("tr", { class: "clickable" + (SEL_FILE === s.file ? " sel" : "") },
+      nameCell,
+      el("td", { class: "num", text: s.exchanges === null ? "—" : String(s.exchanges) }),
+      el("td", { class: "num", text: String(s.tokens) }),
+      el("td", {}, bar),
+      el("td", {},
+        el("div", { class: "row end" },
+          el("button", { text: "move…", onclick: (e) => { e.stopPropagation(); moveSession(s); } }),
+          el("button", { class: "danger", text: "delete",
+            onclick: (e) => { e.stopPropagation(); deleteSession(s); } }))));
+    tr.addEventListener("click", () => openSession(c.slug, s.file));
+    tbody.appendChild(tr);
+  });
+}
+
+// --- session panel ---------------------------------------------------------
+
+async function openSession(slug, file) {
+  SEL_CK = slug; SEL_FILE = file;
+  const data = await api(`/api/session?ckpt=${encodeURIComponent(slug)}&file=${encodeURIComponent(file)}`);
+  $("sessec").hidden = false;
+  $("sestitle").textContent = `${data.checkpoint} / ${data.file}` +
+    (data.editable ? "" : "  — read-only");
+  const host = $("exchanges");
+  host.textContent = "";
+  if (!data.editable) {
+    host.appendChild(el("p", { class: "empty", text: data.reason || "not editable" }));
+  }
+  if (data.legacy && data.editable) {
+    host.appendChild(el("p", { class: "muted",
+      text: "This session is in the old Q&A format. Editing it rewrites the file in the current User/Agent format." }));
+  }
+  data.exchanges.forEach((ex) => host.appendChild(exchangeCard(data, ex)));
+  $("sessec").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function exchangeCard(data, ex) {
+  const card = el("div", { class: "ex" });
+  const head = el("header", {},
+    el("span", { class: "role", text: "exchange " + ex.index }),
+    el("span", { style: "flex:1" }));
+  if (data.editable) {
+    head.appendChild(el("button", { text: "edit", onclick: () => editCard(card, data, ex) }));
+    head.appendChild(el("button", { class: "danger", text: "delete", onclick: async () => {
+      if (!confirm(`Delete exchange ${ex.index}? The hub keeps it in git history.`)) return;
+      try {
+        await post("/api/exchange/delete", { ckpt: data.checkpoint, file: data.file, index: ex.index });
+        toast(`deleted exchange ${ex.index}`, "ok");
+        await refresh();
+        openSession(data.checkpoint, data.file);
+      } catch (e) { toast(e.message, "err"); }
+    } }));
+  }
+  card.appendChild(head);
+  card.appendChild(el("div", { class: "role", style: "padding:8px 12px 0", text: "User" }));
+  card.appendChild(el("div", { class: "body", text: ex.user }));
+  card.appendChild(el("div", { class: "role", style: "padding:8px 12px 0", text: "Agent" }));
+  card.appendChild(el("div", { class: "body agent", text: ex.agent || "(no textual reply captured)" }));
+  return card;
+}
+
+function editCard(card, data, ex) {
+  card.textContent = "";
+  card.appendChild(el("header", {}, el("span", { class: "role", text: "editing exchange " + ex.index })));
+  const u = el("textarea"); u.value = ex.user;
+  const a = el("textarea"); a.value = ex.agent;
+  const wrap = el("div", { style: "padding:10px 12px" });
+  wrap.appendChild(el("div", { class: "role", style: "margin-bottom:4px", text: "User" }));
+  wrap.appendChild(u);
+  wrap.appendChild(el("div", { class: "role", style: "margin:10px 0 4px", text: "Agent" }));
+  wrap.appendChild(a);
+  wrap.appendChild(el("div", { class: "row end", style: "margin-top:10px" },
+    el("button", { text: "cancel", onclick: () => openSession(data.checkpoint, data.file) }),
+    el("button", { class: "primary", text: "save", onclick: async () => {
+      try {
+        await post("/api/exchange/edit", { ckpt: data.checkpoint, file: data.file,
+          index: ex.index, user: u.value, agent: a.value });
+        toast(`rewrote exchange ${ex.index}`, "ok");
+        await refresh();
+        openSession(data.checkpoint, data.file);
+      } catch (e) { toast(e.message, "err"); }
+    } })));
+  card.appendChild(wrap);
+}
+
+// --- mutations -------------------------------------------------------------
+
+async function deleteSession(s) {
+  if (!confirm(`Delete session ${s.file}? The hub keeps it in git history.`)) return;
+  try {
+    await post("/api/session/delete", { ckpt: SEL_CK, file: s.file });
+    toast("session deleted", "ok");
+    SEL_FILE = null; $("sessec").hidden = true;
+    await refresh(); selectCheckpoint(SEL_CK);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function moveSession(s) {
+  const others = DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
+  if (!others.length) return toast("no other checkpoint to move into", "err");
+  const to = prompt(`Move ${s.file} to which checkpoint?\n\n${others.join("\n")}`, others[0]);
+  if (!to) return;
+  try {
+    await post("/api/session/move", { ckpt: SEL_CK, file: s.file, to });
+    toast(`moved to ${to}`, "ok");
+    $("sessec").hidden = true;
+    await refresh(); selectCheckpoint(SEL_CK);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+function wire() {
+  $("reload").onclick = () => refresh().then(() => SEL_CK && selectCheckpoint(SEL_CK));
+  $("budget").onchange = () => refresh().then(() => SEL_CK && selectCheckpoint(SEL_CK));
+  $("newckpt").onclick = async () => {
+    const name = prompt("New checkpoint name:");
+    if (!name) return;
+    try { await post("/api/checkpoint/create", { name }); toast("checkpoint created", "ok"); await refresh(); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  $("ck-rename").onclick = async () => {
+    const name = prompt("Rename checkpoint to:", SEL_CK);
+    if (!name || name === SEL_CK) return;
+    try {
+      const r = await post("/api/checkpoint/rename", { slug: SEL_CK, name });
+      toast(`renamed to ${r.slug}`, "ok");
+      SEL_CK = r.slug; $("sessec").hidden = true;
+      await refresh(); selectCheckpoint(SEL_CK);
+    } catch (e) { toast(e.message, "err"); }
+  };
+  $("ck-delete").onclick = async () => {
+    const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
+    if (!confirm(`Delete checkpoint ${SEL_CK} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
+    try {
+      await post("/api/checkpoint/delete", { slug: SEL_CK });
+      toast("checkpoint deleted", "ok");
+      SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
+      await refresh();
+    } catch (e) { toast(e.message, "err"); }
+  };
+  $("ck-link").onclick = async () => {
+    const others = DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
+    if (!others.length) return toast("nothing to link to", "err");
+    const b = prompt(`Link ${SEL_CK} with:\n\n${others.join("\n")}`, others[0]);
+    if (!b) return;
+    try { await post("/api/link", { a: SEL_CK, b }); toast("linked", "ok"); await refresh(); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  $("ck-unlink").onclick = async () => {
+    const partners = DATA.links.filter((e) => e.includes(SEL_CK)).map((e) => (e[0] === SEL_CK ? e[1] : e[0]));
+    if (!partners.length) return toast("no links on this checkpoint", "err");
+    const b = prompt(`Unlink ${SEL_CK} from:\n\n${partners.join("\n")}`, partners[0]);
+    if (!b) return;
+    try { await post("/api/unlink", { a: SEL_CK, b }); toast("unlinked", "ok"); await refresh(); }
+    catch (e) { toast(e.message, "err"); }
+  };
+}
+
+async function refresh() {
+  const budget = $("budget").value;
+  DATA = await api("/api/map?budget=" + encodeURIComponent(budget === "" ? "none" : budget));
+  $("hubpath").textContent = DATA.current ? "current: " + DATA.current : "no current checkpoint";
+  drawMap();
+  if (SEL_CK && !DATA.checkpoints.some((c) => c.slug === SEL_CK)) {
+    SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
+  }
+}
+
+wire();
+refresh().catch((e) => toast(e.message, "err"));
+</script>
+</body>
+</html>

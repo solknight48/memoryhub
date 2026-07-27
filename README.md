@@ -75,6 +75,7 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh log` | The hub's git journal (every mutation is a commit). |
 | `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort, hub restored. |
 | `mh hubs [--prune]` | All registered hubs. |
+| `mh ui [--port N] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
 | `mh skill install` | Install the Claude Code skill. |
 
 ## What `mh save` actually does
@@ -136,6 +137,41 @@ I want to build a memory management extension for terminal use.
 
 A "git for context" — nice concept. Let me take a quick look …
 ```
+
+## The map: `mh ui`
+
+```console
+$ mh ui
+mh ui: http://127.0.0.1:7777/?t=iZOfgx9wYdtc7eA9YTSyYQ
+```
+
+A checkpoint timeline — nodes sized by session count, linked checkpoints joined
+by an arc, the current pointer ringed, and the sessions the next `mh load` would
+actually include picked out at your token budget. Click a checkpoint for its
+sessions, a session for its exchanges.
+
+From there you can **delete or rewrite a single exchange**, delete or move a
+whole session, and rename, delete, link or unlink checkpoints. Every change is a
+commit in the hub (`curate: …` in `mh log`), so `git -C .memoryhub revert` is
+the undo. `--read-only` serves the map with editing disabled.
+
+Two things make editing safe rather than reckless:
+
+- **mh will not rewrite a file it cannot reproduce.** Before any edit it parses
+  the session and re-renders it; unless the result matches the original
+  byte-for-byte the session is marked read-only in the UI and left alone. This
+  matters because purified dialog often *quotes* mh's own output — a session
+  about MemoryHub contains `## User 1` lines as content — and a parser that
+  guessed wrong would silently split a turn in half.
+- **Nothing is written until the commit is known to work.** A curation writes
+  then commits; if the commit failed afterwards, the change would sit on disk
+  outside the journal. mh checks the hub can commit *first*, so an error means
+  nothing happened.
+
+Serving is loopback-only and every request carries a one-shot token minted at
+startup (any page in your browser can otherwise POST to `127.0.0.1`), with the
+`Host` header checked so a hostile DNS name cannot be pointed at the port. The
+page is self-contained — no CDN, no network — so it works offline.
 
 ## Taking over a project with existing history
 
