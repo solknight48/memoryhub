@@ -91,7 +91,7 @@ $ mh load                        # 两者的会话，按时间合并
 
 ```console
 $ mh ui
-mh ui: http://127.0.0.1:7777/?t=iZOfgx9wYdtc7eA9YTSyYQ
+mh ui: http://127.0.0.1:7777/?t=<每次启动新生成的 token>
 ```
 
 一条检查点时间线：节点大小对应会话数，链接用弧线相连，当前指针带外圈高亮，并按 token

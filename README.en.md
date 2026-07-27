@@ -100,7 +100,7 @@ a purified save of the same session — one representation per session.
 
 ```console
 $ mh ui
-mh ui: http://127.0.0.1:7777/?t=iZOfgx9wYdtc7eA9YTSyYQ
+mh ui: http://127.0.0.1:7777/?t=<a fresh token, minted per run>
 ```
 
 A checkpoint timeline: nodes sized by session count, links drawn as arcs, the
