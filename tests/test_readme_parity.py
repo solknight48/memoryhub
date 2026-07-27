@@ -14,8 +14,8 @@ import pytest
 from memoryhub.cli import app
 
 ROOT = Path(__file__).resolve().parents[1]
-EN = ROOT / "README.md"
-ZH = ROOT / "README.zh-CN.md"
+ZH = ROOT / "README.md"  # Chinese is the front page GitHub renders
+EN = ROOT / "README.en.md"
 READMES = (EN, ZH)
 
 
@@ -24,7 +24,17 @@ def _text(path: Path) -> str:
 
 
 def _headings(text: str, level: str) -> int:
-    return len(re.findall(rf"^{level} ", text, re.M))
+    """Count real headings only. The READMEs quote mh's own `## User 1` output
+    inside code fences, which is content, not structure."""
+    count, fence = 0, None
+    for line in text.splitlines():
+        token = re.match(r"^\s*(```|~~~)", line)
+        if token:
+            fence = token.group(1) if fence is None else (None if fence == token.group(1) else fence)
+            continue
+        if fence is None and line.startswith(level + " "):
+            count += 1
+    return count
 
 
 def _command_column(text: str) -> list[str]:
@@ -63,7 +73,7 @@ def test_same_section_structure():
 
 def test_command_tables_are_identical():
     en, zh = _command_column(_text(EN)), _command_column(_text(ZH))
-    assert en, "no command table found in README.md"
+    assert en, f"no command table found in {EN.name}"
     assert en == zh, "command tables differ between the two READMEs"
 
 
@@ -81,5 +91,5 @@ def test_every_cli_command_is_documented():
 
 
 def test_the_readmes_link_to_each_other():
-    assert f"]({ZH.name})" in _text(EN), f"README.md does not link to {ZH.name}"
+    assert f"]({ZH.name})" in _text(EN), f"{EN.name} does not link to {ZH.name}"
     assert f"]({EN.name})" in _text(ZH), f"{ZH.name} does not link to {EN.name}"

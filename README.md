@@ -1,306 +1,148 @@
 # MemoryHub (`mh`)
 
-**English** | [简体中文](README.zh-CN.md)
+**简体中文** | [English](README.en.md)
 
-Git-like checkpoints for AI session context.
+用 Git 式的检查点管理 AI 会话上下文。
 
-Every Claude Code session starts from zero. MemoryHub fixes that: when a session
-ends, `mh save` **purifies** it (pure User/Agent dialog — tool calls, thinking, and
-harness noise stripped, mechanically, no LLM cost) and stores it into a
-**checkpoint**. A checkpoint is a sub-hub: a named container of purified
-sessions. Checkpoints are **independent** by default; **link** two and they
-**load together, merged in time order**. A new session runs `mh load` and gets
-the project's memory back.
+每次 Claude Code 会话都从零开始。MemoryHub 解决这件事：会话结束时 `mh save` 把它
+**提纯**（只留 User/Agent 对话，工具调用、思考过程和框架噪音按规则剥除，纯机械处理，
+不花 LLM 费用），存进一个**检查点**。检查点之间默认独立；把两个**链接**起来，它们就会
+一起加载并按时间合并。新会话运行 `mh load`，记忆就回来了。
 
 ```
-.memoryhub/                                  ← the hub: a normal git repo
+.memoryhub/                                  ← 中枢：一个普通的 git 仓库
   checkpoints/
-    2026-07-14_1650_data-pipeline/           ← checkpoint: <created>_<name>/
-      2026-07-10_1432_a1b2c3d4.md            ← purified session: <time>_<session-id>.md
-      2026-07-12_0910_e5f6a7b8.md
-    2026-07-17_1820_backtest-scaffold/
-      2026-07-15_1100_c9d0e1f2.md
-  links.toml                                 ← linked checkpoints load together
-  current                                    ← untracked pointer: the current checkpoint
+    2026-07-14_1650_data-pipeline/           ← 检查点：<创建时间>_<名称>/
+      2026-07-10_1432_a1b2c3d4.md            ← 提纯会话：<结束时间>_<会话 id>.md
+  links.toml                                 ← 链接的检查点一起加载
+  current                                    ← 本地指针，不纳入版本控制
 ```
 
-## Install
+## 安装
 
 ```sh
 uv tool install git+https://github.com/solknight48/memoryhub
-mh skill install           # teach Claude Code sessions the workflow
+mh skill install           # 让 Claude Code 会话学会这套工作流
 ```
 
-**Requirements**: Linux or macOS, git ≥ 2.32, Python ≥ 3.12. `mh` shells out to
-the system `git` and touches nothing platform-specific; the test suite runs on
-both. Windows is untested.
+需要 Linux 或 macOS、git ≥ 2.32、Python ≥ 3.12。Windows 未测试。
 
-### Updating, and working from a clone
+从克隆仓库安装时注意：`uv tool install` 会**复制**源码，装出来的是快照，之后
+`git pull` 不会更新已安装的 `mh`，新命令也不会出现。想让它跟随工作区就用
+`uv tool install --force -e .`；想重新生成快照就加 `--force` 再装一次。
 
-`uv tool install` **copies** the source, so an install made from a path is a
-snapshot: `git pull` in the clone does not change the installed `mh`, and a new
-command like `mh ui` simply will not appear. Pick one:
-
-```sh
-# follow your working tree — every edit and every `git pull` is live,
-# and there is nothing to update afterwards
-uv tool install --force -e .
-
-# or re-snapshot on demand, from the clone or straight from GitHub
-uv tool install --force .
-uv tool install --force git+https://github.com/solknight48/memoryhub
-```
-
-To see which one you have:
-
-```sh
-cat "$(uv tool dir)"/memoryhub/lib/python*/site-packages/memoryhub-*.dist-info/direct_url.json
-```
-
-`"editable": true` means it follows your working tree. If `mh --help` is missing
-a command you know is in the source, this is why.
-
-## Quickstart
+## 快速上手
 
 ```console
 $ cd ~/dev/tickstore
-$ mh init                        # hub at the project root; prints a CLAUDE.md snippet
-$ mh checkpoint data-pipeline    # create a checkpoint; it becomes current
+$ mh init                        # 在项目根目录建立中枢
+$ mh checkpoint data-pipeline    # 创建检查点，并设为当前
 
-# ... work with Claude; at session end (agent runs this itself via the skill):
+# ……和 Claude 一起工作；会话结束时（agent 通过 skill 自己执行）：
 $ mh save
 saved 2026-07-18_0941_7aee4e68.md -> data-pipeline (1 sessions)
 
-# next session, warm start:
+# 下一次会话，热启动：
 $ mh load
 <!-- mh | loaded: data-pipeline | 1 of 1 sessions | @ 3f1c2ab -->
-...
 
-# a second workstream, later linked to the first:
+# 第二条工作线，链接到第一条，之后一起加载：
 $ mh checkpoint backtest
 $ mh save
 $ mh link data-pipeline backtest
-$ mh load                        # sessions of BOTH, merged in time order
-<!-- mh | loaded: backtest + data-pipeline (linked) | 3 of 3 sessions | @ 9d8e7f6 -->
+$ mh load                        # 两者的会话，按时间合并
 ```
 
-## Commands
+## 命令
 
-| Command | What it does |
+| 命令 | 作用 |
 |---|---|
-| `mh init [--global] [--claude]` | Create the hub (`--claude` appends the Memory snippet to CLAUDE.md). |
-| `mh checkpoint <name>` | New checkpoint (sub-hub); becomes current. |
-| `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | Purify the current session into a checkpoint. |
-| `mh save [CKPT] --compact --file MD` | Store an agent-written summary of this session instead of the full dialog. |
-| `mh import [--to CKPT] [--agent A]... [--dry-run]` | Backfill: discover this project's past sessions (Claude Code, pi, Codex) launched in your cwd's subtree and import them into a checkpoint. |
-| `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | Warm-start pack: selection + linked closure, time-merged. |
-| `mh link A B` / `mh unlink A B` | Make checkpoints load together / stop that. |
-| `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | Inspect the hub. |
-| `mh back [N]` / `mh forward [N]` / `mh goto CKPT` | Walk the current pointer across the time-ordered checkpoints. |
-| `mh status` | Position, counts, staleness, remote. |
-| `mh log` | The hub's git journal (every mutation is a commit). |
-| `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort, hub restored. |
-| `mh hubs [--prune]` | All registered hubs. |
-| `mh ui [--port N] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
-| `mh skill install` | Install the Claude Code skill. |
+| `mh init [--global] [--claude]` | 创建中枢。 |
+| `mh checkpoint <name>` | 新建检查点，并设为当前。 |
+| `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | 提纯当前会话并存入检查点。 |
+| `mh save [CKPT] --compact --file MD` | 存入 agent 撰写的摘要，替代完整对话。 |
+| `mh import [--to CKPT] [--agent A]... [--dry-run]` | 回填本项目的历史会话（Claude Code、pi、Codex）。 |
+| `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | 热启动上下文包：所选检查点 + 链接闭包，按时间合并。 |
+| `mh link A B` / `mh unlink A B` | 让两个检查点一起加载 / 取消。 |
+| `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | 查看中枢内容。 |
+| `mh back [N]` / `mh forward [N]` / `mh goto CKPT` | 移动当前指针。 |
+| `mh status` / `mh log` | 位置与统计 / 中枢的 git 日志。 |
+| `mh sync` | 对 `origin` 执行 `pull --rebase` + `push`，冲突自动中止。 |
+| `mh hubs [--prune]` | 列出所有已注册的中枢。 |
+| `mh ui [--port N] [--read-only]` | 在浏览器里打开检查点地图并整理中枢。 |
+| `mh skill install` | 安装 Claude Code skill。 |
 
-## What `mh save` actually does
+## 保存：提纯，或压缩
 
-One deterministic pass — no LLM call, no network:
+`mh save` 是一趟确定性处理，不调用 LLM、不联网：找到本次会话的 transcript，
+按顺序把每个用户轮次与其后的助手文本配对，剥掉一切不是对话的内容（思考块、工具调用与
+结果、子 agent 往来、`<system-reminder>`、框架包装消息、被打断的轮次），丢弃触发这次
+保存的末尾问句，然后写入 `<结束时间>_<会话 key>.md` 并提交。
 
-1. **Resolve the target checkpoint** — `--to CKPT` (exact slug, unique prefix, or
-   1-based index from `mh list`), otherwise the `current` pointer. No current
-   checkpoint and no `--to` is an error, never a silent default.
-2. **Find the transcript**, first match wins: `--transcript PATH` (schema
-   auto-detected) → `--session-id ID` or `$CLAUDE_CODE_SESSION_ID`, globbed
-   across `~/.claude/projects/*/` → otherwise this project's newest transcript
-   across all agents, since a live session is always its own newest.
-   (`--file MD` skips steps 2–5 and stores markdown you supply verbatim.)
-3. **Pair the dialog** — walk the JSONL in order, pairing each user turn with the
-   assistant text that follows it. Consecutive unanswered user messages merge
-   into one **User** turn; assistant text before any question is ignored.
-4. **Strip everything that isn't dialog** — mechanically, by rule:
-   - assistant **thinking blocks, tool calls, and tool results** — only
-     `type: "text"` content blocks survive;
-   - **subagent traffic** and meta records (`isSidechain`, `isMeta`);
-   - `<system-reminder>…</system-reminder>` blocks, anywhere in a message;
-   - harness wrappers whose message *starts* with `<command-name>`,
-     `<command-args>`, `<local-command-stdout>`, `<bash-input>`,
-     `<bash-stdout>`, `<user-prompt-submit-hook>`, and friends — matched at the
-     start only, so a genuine question that merely mentions a tag survives;
-   - turns cancelled by `[Request interrupted by user` / `[Request cancelled`.
-5. **Drop the trailing unanswered turn** — the "save this session" request that
-   triggered the run never lands in the record. (`mh import` keeps it: archival
-   imports preserve the full history.) Nothing left after this is an error, so
-   an empty session never becomes an empty file.
-6. **Write `<end-time>_<key>.md`** into the checkpoint directory. The timestamp
-   is the session's **end** time — the last record's timestamp in local time,
-   falling back to the transcript's mtime — so time-merged loading reflects when
-   work actually happened, even for sessions saved late. The key is the session's
-   identity: `7aee4e68` (Claude, first 8 of the uuid), `pi-…`, or `cx-…`. **Any
-   existing file with the same key in that checkpoint is deleted first** —
-   re-saving a session replaces it and moves it to its new end time; it never
-   duplicates.
-7. **Commit** — `git add -A` and `save: <file> -> <checkpoint>` in the hub. A
-   save that changed nothing commits nothing.
+时间戳取会话的**结束**时间，所以按时间合并加载时顺序反映工作真正发生的时刻。
+每个检查点中每个会话只有一个文件：重新保存是替换，不会重复。
 
-The rendered file is `# Session Context`: a provenance line naming the source
-transcript, session id, and exchange count, then `## User 1` / `## Agent 1`
-pairs separated by `---`. An answered-but-silent turn renders as
-`_(no textual reply captured)_`.
+`mh save --compact --file <md>` 则存入一份摘要，替代完整对话。**mh 自己不做摘要**——
+它没有模型也不联网，撰写摘要的是驱动会话的 agent，skill 里带了这套流程，所以你只要说
+"压缩保存"即可。在没有 agent 的 shell 里直接跑会**故意失败**，而不是退回去存提纯对话。
+压缩保存落在会话真正的身份下，因此会替换同一会话的提纯版本——每个会话只保留一种表示。
 
-```markdown
-# Session Context
-
-_Pure dialog extracted from `7aee4e68-….jsonl` (session `7aee4e68-…`). 12
-exchanges. Tool calls, results, and internal reasoning removed._
-
-## User 1
-
-I want to build a memory management extension for terminal use.
-
-## Agent 1
-
-A "git for context" — nice concept. Let me take a quick look …
-```
-
-## Compacted saves: `mh save --compact`
-
-Sometimes you want the *gist* of a session in memory, not all forty exchanges of
-it. `mh save --compact` stores a summary instead of the purified dialog:
-
-```console
-$ mh save backtest --compact --file /tmp/summary.md
-saved 2026-07-27_1512_fb9fbc61.md -> backtest (3 sessions)
-```
-
-**mh does not summarize by itself** — it has no model, no API key, and makes no
-network calls, and `--compact` does not change that. The agent driving the
-session writes the summary and hands it over with `--file`; the mh skill carries
-that workflow, so in practice you just ask for a compact save and the agent does
-both halves. Run `mh save --compact` from a bare shell with no summary and it
-fails, deliberately: falling back to purified dialog would put a representation
-in the checkpoint that you did not ask for.
-
-Unlike plain `--file` (which keys off the filename), a compacted save lands under
-the **session's real identity**, so it replaces a purified save of the same
-session rather than sitting beside it — one representation per session, whichever
-you saved last. The file is a distinct document type (`# Session Context —
-Compacted`), which `mh ui` shows as a summary rather than exchanges: there are no
-turns to edit individually, so it is read-only there by design. This also means a
-summary that *quotes* the conversation can't be mistaken for dialog.
-
-## The map: `mh ui`
+## 地图：`mh ui`
 
 ```console
 $ mh ui
 mh ui: http://127.0.0.1:7777/?t=iZOfgx9wYdtc7eA9YTSyYQ
 ```
 
-A checkpoint timeline — nodes sized by session count, linked checkpoints joined
-by an arc, the current pointer ringed, and the sessions the next `mh load` would
-actually include picked out at your token budget. Click a checkpoint for its
-sessions, a session for its exchanges.
+一条检查点时间线：节点大小对应会话数，链接用弧线相连，当前指针带外圈高亮，并按 token
+预算标出下一次 `mh load` 实际会包含哪些会话。点进去可以**删除或改写单独一轮对话**、
+删除或移动会话，以及重命名、删除、链接检查点。每次改动都是中枢里的一次提交，
+`git -C .memoryhub revert` 就是撤销。`--read-only` 只看不改。
 
-From there you can **delete or rewrite a single exchange**, delete or move a
-whole session, and rename, delete, link or unlink checkpoints. Every change is a
-commit in the hub (`curate: …` in `mh log`), so `git -C .memoryhub revert` is
-the undo. `--read-only` serves the map with editing disabled.
+安全性：只监听回环地址，每个请求都要带启动时生成的一次性 token，并校验 `Host` 头；
+页面完全自包含，离线可用。**mh 绝不改写自己无法逐字节复现的文件**——先解析再重新渲染，
+对不上就标为只读。提纯后的对话经常引用 mh 自己的输出（讨论 MemoryHub 的会话正文里就有
+`## User 1` 这样的行），这个保护让编辑不会把一轮对话劈成两半。
 
-Two things make editing safe rather than reckless:
-
-- **mh will not rewrite a file it cannot reproduce.** Before any edit it parses
-  the session and re-renders it; unless the result matches the original
-  byte-for-byte the session is marked read-only in the UI and left alone. This
-  matters because purified dialog often *quotes* mh's own output — a session
-  about MemoryHub contains `## User 1` lines as content — and a parser that
-  guessed wrong would silently split a turn in half.
-- **Nothing is written until the commit is known to work.** A curation writes
-  then commits; if the commit failed afterwards, the change would sit on disk
-  outside the journal. mh checks the hub can commit *first*, so an error means
-  nothing happened.
-
-Serving is loopback-only and every request carries a one-shot token minted at
-startup (any page in your browser can otherwise POST to `127.0.0.1`), with the
-`Host` header checked so a hostile DNS name cannot be pointed at the port. The
-page is self-contained — no CDN, no network — so it works offline.
-
-## Taking over a project with existing history
+## 接管一个已有历史的项目
 
 ```console
-$ cd ~/dev/legacy-project
 $ mh init
-$ mh import --dry-run     # what's out there, across all agents
+$ mh import --dry-run     # 先看看都有什么
 $ mh import
 imported 17 sessions -> history (claude 11, codex 1, pi 5)
-$ mh load                 # the project's whole past, time-merged
 ```
 
-`mh import` discovers this project's past sessions across **Claude Code**
-(`~/.claude/projects`), **pi** (`~/.pi/agent/sessions`), and **Codex**
-(`~/.codex/sessions`), validated against each session's own recorded `cwd` (so
-sibling projects never leak in), purifies each mechanically, and lands them in
-a `history` checkpoint (`--to` overrides) as one git commit.
+`mh import` 会在 Claude Code、pi 和 Codex 的会话目录中发现本项目的历史，用每个会话
+自己记录的 `cwd` 校验（兄弟项目不会混进来），逐个提纯后作为一次提交落入 `history`
+检查点。范围跟随当前目录：在仓库根目录运行导入整个项目，在子目录运行只导入那条工作线。
+已保存过的会话会跳过，所以之后再次运行只补新增的。
 
-**Scope follows your cwd**: run from the repo root and the whole project's
-history is imported; run from a subfolder and only sessions launched in that
-subtree are imported — one workstream at a time:
+## 值得了解的
 
-```console
-$ cd ~/dev/legacy-project/backtest
-$ mh import --to backtest     # just the backtest workstream's sessions
-```
+- **加载**：`mh load` 取当前检查点（或你指定的），沿链接扩展，在 `--budget` 内
+  从旧到新输出完整会话（默认约 6000 tokens，保留最新的一段连续后缀）。
+- **每一次变更都是一次 git 提交**。撤销、重命名、删除、合并都可以直接用
+  `git -C .memoryhub ...`——中枢就是个普通仓库。
+- **是 exclude 不是 ignore**：`mh init` 写项目里的 `.git/info/exclude`，
+  不动你已纳入版本控制的 `.gitignore`。
+- **持久性**：中枢被排除在项目仓库外，项目的远端不会备份它——配置一次 `origin`
+  然后用 `mh sync`。
+- **并发**：由 git 自己的 `index.lock` 串行化，没有自造的锁。
 
-Already-saved sessions are skipped, so re-running `mh import` later picks up
-only what's new. Archival imports keep the final unanswered turn (unlike live
-`mh save`, which drops the request that triggered it). Adding another agent is
-one discover function + one extract function in `src/memoryhub/agents.py`.
-
-## Semantics worth knowing
-
-- **Loading**: `mh load` takes the current checkpoint (or the ones you name),
-  expands across links (connected component), and emits whole sessions oldest →
-  newest within `--budget` (default ~6000 tokens; selection keeps the newest
-  contiguous suffix, the omission footer names what was cut).
-- **Saving** is detailed above: one file per session per checkpoint, keyed by
-  session identity and stamped with the session's end time.
-- **Walking** moves only the untracked `current` pointer; nothing is checked
-  out, all checkpoints stay on disk.
-- **Every mutation is a git commit** in the hub (`mh log`). Undo, surgery,
-  rename, delete, merge: plain `git -C .memoryhub ...` — the hub is a normal
-  repo and mh never fights you over it.
-- **Excluded, not ignored**: `mh init` writes `.git/info/exclude` in the project
-  (local-only) rather than touching your tracked `.gitignore`.
-- **Concurrency**: two sessions writing the same hub are serialized by git's own
-  `index.lock`; mh surfaces a retry hint. No custom locking.
-- **Durability**: the hub is excluded from the project repo, so the project's
-  remote does **not** back it up — configure `origin` once and use `mh sync`.
-- Relationship to the `purify-context` skill: same extraction (vendored,
-  parity-tested). That skill remains for ad-hoc exports; `mh save` is
-  purify + store + commit in one deterministic step.
-
-## Development
+## 开发
 
 ```sh
 git clone https://github.com/solknight48/memoryhub
 cd memoryhub
-uv run pytest              # full E2E suite (subprocess CLI in a hermetic HOME)
-uv tool install --force -e .   # so the installed `mh` is the code you are editing
+uv run pytest                  # 完整 E2E 套件，在隔离的 HOME 中以子进程跑 CLI
+uv tool install --force -e .   # 让装好的 mh 就是你在改的代码
 ```
 
-Layout: `src/memoryhub/{cli,hub,git,purify,checkpoint,load,agents,curate,server}.py`;
-the Claude Code skill and the `mh ui` page ship as package data in
-`src/memoryhub/{skill,ui}/`.
+`purify.py` 内联自 `purify-context` skill，有一致性测试把提取语义钉在它上面。
+`curate.py` 是唯一解析会话 markdown 的代码，绝不能改写"解析 → 重新渲染"无法逐字节
+还原的文件。`server.py` 刻意只用标准库，好让 `typer` 保持为唯一运行时依赖。
 
-- `purify.py` is vendored from the `purify-context` skill — a parity test pins
-  extraction semantics to it, and skips when that skill isn't on the machine.
-- `curate.py` is the only code that parses session markdown (`load`, `show` and
-  `search` read files verbatim), and must never rewrite a file whose
-  parse → re-render isn't byte-identical.
-- `server.py` is stdlib-only on purpose, so `typer` stays the single runtime
-  dependency; its `dispatch()` is a plain function, so the API is tested without
-  a socket.
+## 许可证
 
-## License
-
-[MIT](LICENSE).
+[MIT](LICENSE)。
