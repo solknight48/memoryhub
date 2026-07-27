@@ -337,13 +337,15 @@ function selectCheckpoint(slug) {
   c.sessions.forEach((s) => {
     const nameCell = el("td", {}, el("span", { class: "file", text: s.file }));
     if (omitted.has(s.id)) nameCell.appendChild(el("span", { class: "badge", text: "over budget" }));
+    if (s.compacted) nameCell.appendChild(el("span", { class: "badge", text: "compacted" }));
     if (s.legacy) nameCell.appendChild(el("span", { class: "badge", text: "Q&A format" }));
-    if (!s.editable) nameCell.appendChild(el("span", { class: "badge warn", text: "read-only" }));
+    if (!s.editable && !s.compacted) nameCell.appendChild(el("span", { class: "badge warn", text: "read-only" }));
     const bar = el("div", { class: "bar" });
     bar.style.width = Math.round(70 * (s.tokens / maxTok)) + "px";
     const tr = el("tr", { class: "clickable" + (SEL_FILE === s.file ? " sel" : "") },
       nameCell,
-      el("td", { class: "num", text: s.exchanges === null ? "—" : String(s.exchanges) }),
+      // a compacted session summarises N exchanges but stores none: "0" would read as empty
+      el("td", { class: "num", text: (s.compacted || s.exchanges === null) ? "—" : String(s.exchanges) }),
       el("td", { class: "num", text: String(s.tokens) }),
       el("td", {}, bar),
       el("td", {},
@@ -368,6 +370,12 @@ async function openSession(slug, file) {
   host.textContent = "";
   if (!data.editable) {
     host.appendChild(el("p", { class: "empty", text: data.reason || "not editable" }));
+  }
+  if (data.compacted && data.raw) {
+    const card = el("div", { class: "ex" });
+    card.appendChild(el("header", {}, el("span", { class: "role", text: "compacted summary" })));
+    card.appendChild(el("div", { class: "body", text: data.raw }));
+    host.appendChild(card);
   }
   if (data.legacy && data.editable) {
     host.appendChild(el("p", { class: "muted",

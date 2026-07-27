@@ -14,7 +14,7 @@ import typer
 
 from . import agents as agents_mod
 from . import checkpoint as ck
-from . import git
+from . import curate, git
 from . import hub as hubmod
 from . import load as loadmod
 from . import purify
@@ -122,14 +122,49 @@ def checkpoint(
         print(f"checkpoint '{c.slug}' created (current)")
 
 
+def _resolve_session(hub: Path, session_id, transcript):
+    """(source, session id, identity key, turns, last timestamp) for the session
+    being saved. Shared by the purified and compacted paths so both land under
+    the same identity — a compacted save replaces a purified one, and vice
+    versa, instead of duplicating the session."""
+    root = hubmod.project_root_of(hub)
+    sid_opt = session_id or os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if transcript:
+        src = purify.find_transcript(transcript=transcript)
+        agent_name = agents_mod.detect_agent(src)
+    elif sid_opt:
+        src = purify.find_transcript(session_id=sid_opt)
+        agent_name = "claude"
+    else:
+        # No session id in the environment (pi, codex, plain shell): the
+        # newest transcript of this project across all agents — a live
+        # session is always its own newest.
+        candidates = agents_mod.discover(root)
+        if not candidates:
+            raise MhError("no transcripts found for this project (claude, pi, codex)")
+        src = max(candidates, key=lambda d: d.path.stat().st_mtime).path
+        agent_name = agents_mod.detect_agent(src)
+    sid, key = agents_mod.identify(agent_name, src)
+    turns, last_ts = agents_mod.extract(agents_mod.Discovered(agent_name, src, sid, key))
+    return src, sid, key, turns, last_ts
+
+
 @app.command()
 @guard
 def save(
+    checkpoint_ref: Optional[str] = typer.Argument(
+        None, metavar="[CHECKPOINT]", help="Target checkpoint (same as --to)."
+    ),
     to: Optional[str] = typer.Option(
         None, "--to", help="Target checkpoint (default: current)."
     ),
     file: Optional[Path] = typer.Option(
         None, "--file", help="Ingest an already-purified markdown file."
+    ),
+    compact: bool = typer.Option(
+        False,
+        "--compact",
+        help="Store an agent-written summary of this session (needs --file).",
     ),
     session_id: Optional[str] = typer.Option(
         None, "--session-id", help="Purify a specific session id."
@@ -142,8 +177,11 @@ def save(
     """Purify the current session and store it into a checkpoint."""
     hub = _hub()
     _announce(hub)
-    if to:
-        target = ck.resolve(hub, to)
+    if checkpoint_ref and to and checkpoint_ref != to:
+        raise MhError(f"two target checkpoints given: '{checkpoint_ref}' and '{to}'")
+    ref = to or checkpoint_ref
+    if ref:
+        target = ck.resolve(hub, ref)
     else:
         current = hubmod.read_current(hub)
         if not current:
@@ -152,7 +190,26 @@ def save(
             )
         target = ck.resolve(hub, current)
 
-    if file:
+    if compact:
+        # mh has no model of its own: the agent driving the session writes the
+        # summary and hands it over. Without one there is nothing to compact,
+        # and falling back to purified dialog would put a representation in the
+        # checkpoint that the flag did not ask for.
+        if not file:
+            raise MhError(
+                "--compact needs the summary to store: mh does not summarize by "
+                "itself. Let the agent write one and pass it with --file "
+                "(the mh skill does this), or save without --compact."
+            )
+        if not file.is_file():
+            raise MhError(f"file not found: {file}")
+        summary = file.read_text(encoding="utf-8").strip()
+        if not summary:
+            raise MhError(f"{file} is empty — nothing to compact")
+        src, sid, key, turns, last_ts = _resolve_session(hub, session_id, transcript)
+        body = curate.render_compacted(summary, str(src), sid, len(turns))
+        stamp = purify.stamp_for(last_ts, src)
+    elif file:
         if not file.is_file():
             raise MhError(f"file not found: {file}")
         body = file.read_text(encoding="utf-8")
@@ -163,29 +220,7 @@ def save(
         )
         key = ck.slugify(file.stem)[:40]
     else:
-        root = hubmod.project_root_of(hub)
-        sid_opt = session_id or os.environ.get("CLAUDE_CODE_SESSION_ID")
-        if transcript:
-            src = purify.find_transcript(transcript=transcript)
-            agent_name = agents_mod.detect_agent(src)
-        elif sid_opt:
-            src = purify.find_transcript(session_id=sid_opt)
-            agent_name = "claude"
-        else:
-            # No session id in the environment (pi, codex, plain shell): the
-            # newest transcript of this project across all agents — a live
-            # session is always its own newest.
-            candidates = agents_mod.discover(root)
-            if not candidates:
-                raise MhError(
-                    "no transcripts found for this project (claude, pi, codex)"
-                )
-            src = max(candidates, key=lambda d: d.path.stat().st_mtime).path
-            agent_name = agents_mod.detect_agent(src)
-        sid, key = agents_mod.identify(agent_name, src)
-        turns, last_ts = agents_mod.extract(
-            agents_mod.Discovered(agent_name, src, sid, key)
-        )
+        src, sid, key, turns, last_ts = _resolve_session(hub, session_id, transcript)
         turns = purify.drop_trailing_unanswered(turns)
         if not turns:
             raise MhError(f"no dialog found in {src.name}")

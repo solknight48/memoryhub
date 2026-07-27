@@ -90,7 +90,8 @@ $ mh load                        # sessions of BOTH, merged in time order
 |---|---|
 | `mh init [--global] [--claude]` | Create the hub (`--claude` appends the Memory snippet to CLAUDE.md). |
 | `mh checkpoint <name>` | New checkpoint (sub-hub); becomes current. |
-| `mh save [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | Purify the current session into a checkpoint. |
+| `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | Purify the current session into a checkpoint. |
+| `mh save [CKPT] --compact --file MD` | Store an agent-written summary of this session instead of the full dialog. |
 | `mh import [--to CKPT] [--agent A]... [--dry-run]` | Backfill: discover this project's past sessions (Claude Code, pi, Codex) launched in your cwd's subtree and import them into a checkpoint. |
 | `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | Warm-start pack: selection + linked closure, time-merged. |
 | `mh link A B` / `mh unlink A B` | Make checkpoints load together / stop that. |
@@ -162,6 +163,32 @@ I want to build a memory management extension for terminal use.
 
 A "git for context" — nice concept. Let me take a quick look …
 ```
+
+## Compacted saves: `mh save --compact`
+
+Sometimes you want the *gist* of a session in memory, not all forty exchanges of
+it. `mh save --compact` stores a summary instead of the purified dialog:
+
+```console
+$ mh save backtest --compact --file /tmp/summary.md
+saved 2026-07-27_1512_fb9fbc61.md -> backtest (3 sessions)
+```
+
+**mh does not summarize by itself** — it has no model, no API key, and makes no
+network calls, and `--compact` does not change that. The agent driving the
+session writes the summary and hands it over with `--file`; the mh skill carries
+that workflow, so in practice you just ask for a compact save and the agent does
+both halves. Run `mh save --compact` from a bare shell with no summary and it
+fails, deliberately: falling back to purified dialog would put a representation
+in the checkpoint that you did not ask for.
+
+Unlike plain `--file` (which keys off the filename), a compacted save lands under
+the **session's real identity**, so it replaces a purified save of the same
+session rather than sitting beside it — one representation per session, whichever
+you saved last. The file is a distinct document type (`# Session Context —
+Compacted`), which `mh ui` shows as a summary rather than exchanges: there are no
+turns to edit individually, so it is read-only there by design. This also means a
+summary that *quotes* the conversation can't be mistaken for dialog.
 
 ## The map: `mh ui`
 

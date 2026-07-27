@@ -87,7 +87,8 @@ $ mh load                        # 两者的会话，按时间顺序合并
 |---|---|
 | `mh init [--global] [--claude]` | 创建中枢（`--claude` 会把 Memory 片段追加进 CLAUDE.md）。 |
 | `mh checkpoint <name>` | 新建检查点（子中枢），并设为当前。 |
-| `mh save [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | 把当前会话提纯后存入某个检查点。 |
+| `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | 把当前会话提纯后存入某个检查点。 |
+| `mh save [CKPT] --compact --file MD` | 存入由 agent 撰写的本次会话摘要，替代完整对话。 |
 | `mh import [--to CKPT] [--agent A]... [--dry-run]` | 回填：发现本项目在当前目录子树下启动过的历史会话（Claude Code、pi、Codex），导入某个检查点。 |
 | `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | 热启动上下文包：所选检查点 + 链接闭包，按时间合并。 |
 | `mh link A B` / `mh unlink A B` | 让两个检查点一起加载 / 取消。 |
@@ -152,6 +153,28 @@ I want to build a memory management extension for terminal use.
 
 A "git for context" — nice concept. Let me take a quick look …
 ```
+
+## 压缩保存：`mh save --compact`
+
+有时你想存进记忆里的只是一次会话的*要点*，而不是它全部四十轮对话。
+`mh save --compact` 会存入一份摘要，替代提纯后的完整对话：
+
+```console
+$ mh save backtest --compact --file /tmp/summary.md
+saved 2026-07-27_1512_fb9fbc61.md -> backtest (3 sessions)
+```
+
+**mh 自己不做摘要**——它没有模型、没有 API key，也不发起任何网络请求，`--compact`
+并不改变这一点。撰写摘要的是驱动本次会话的 agent，然后通过 `--file` 交给 mh；
+mh 的 skill 里带了这套流程，所以实际使用时你只要提出"压缩保存"，agent 会把两半都做完。
+如果在没有 agent 的普通 shell 里直接跑 `mh save --compact`，它会**故意失败**：
+退回去保存提纯对话，等于往检查点里塞了一个你并没有要的版本。
+
+与单独使用 `--file`（以文件名作为 key）不同，压缩保存会落在**该会话真正的身份**下，
+因此它会替换同一会话的提纯版本，而不是并存——每个会话只保留一种表示，以最后保存的
+那次为准。这类文件是一种独立的文档类型（`# Session Context — Compacted`），
+`mh ui` 会把它作为摘要展示而不是逐轮对话：既然没有可以单独编辑的轮次，它在界面上
+就是只读的。这也意味着一份*引用了*对话内容的摘要，不会被误判成对话本身。
 
 ## 地图：`mh ui`
 

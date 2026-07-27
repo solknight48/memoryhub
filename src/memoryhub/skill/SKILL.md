@@ -28,6 +28,24 @@ checkpoints load together, their sessions merged in time order.
   checkpoint. Run it at session end, and whenever the user asks to save or
   checkpoint. Re-running later in the same session simply updates the saved
   file — never a duplicate.
+- `mh save [<checkpoint>] --compact --file <md>` — store a **summary you write**
+  instead of the full purified dialog, when the user asks for a compact/
+  summarized save (`--compact`, "compact this session", "压缩保存"). mh has no
+  model of its own, so YOU are the summarizer:
+  1. Write the summary to a temp file. Cover, in this order: the user's explicit
+     requests and intent; key technical concepts; files and code sections
+     touched and why; errors hit and how they were fixed; problems solved;
+     every non-tool-result user message; pending tasks; what was in progress
+     immediately before the save; and the next step if one is clearly implied.
+  2. Preserve any security-relevant instruction or constraint **verbatim**, so
+     it still applies to whoever loads this memory later.
+  3. Quote the user's own words for anything in progress — do not paraphrase a
+     task description, or the next session will drift.
+  4. Then `mh save --compact --file <that file>`; delete the temp file after.
+  It lands under the session's real identity, so it replaces (never duplicates)
+  a purified save of the same session — one representation per session.
+  Without `--file` the command fails by design; do not retry without `--compact`
+  unless the user asks for the purified save instead.
 - `mh checkpoint <name>` — start a new checkpoint (becomes current). Only when
   the user declares a new workstream or stage.
 - `mh link A B` / `mh unlink A B` — only on explicit user request.

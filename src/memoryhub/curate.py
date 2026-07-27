@@ -35,6 +35,14 @@ HEADING_RE = re.compile(r"^## (User|Agent|Q|A) ?(\d+)\s*$")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 NO_REPLY = "_(no textual reply captured)_"
 
+# A compacted session is a summary, not exchanges — a different document shape,
+# written by the agent at save time rather than extracted mechanically.
+COMPACT_PREAMBLE_RE = re.compile(
+    r"_Compacted summary of `(?P<src>[^`]*)`"
+    r"(?: \(session `(?P<sid>[^`]*)`\))?\. "
+    r"(?P<n>\d+) exchanges? compacted\. "
+)
+
 
 @dataclass
 class ParsedSession:
@@ -43,10 +51,33 @@ class ParsedSession:
     turns: list[tuple[str, str]]
     legacy: bool
     round_trip: bool
+    compacted: bool = False
 
     @property
     def editable(self) -> bool:
-        return self.round_trip
+        # A summary has no exchanges to operate on; per-turn surgery is
+        # meaningless, so it is deliberately read-only rather than unsupported.
+        return self.round_trip and not self.compacted
+
+
+def render_compacted(
+    summary: str, source: str, session_id: str | None, exchanges: int
+) -> str:
+    """A summary the agent wrote, wrapped in mh's session document shape."""
+    src = os.path.basename(source)
+    prov = f"`{src}`" + (f" (session `{session_id}`)" if session_id else "")
+    return "\n".join(
+        [
+            "# Session Context — Compacted",
+            "",
+            f"_Compacted summary of {prov}. "
+            f"{exchanges} exchange{'' if exchanges == 1 else 's'} compacted. "
+            "Written by the agent at save time, not a mechanical extraction._",
+            "",
+            summary.strip(),
+            "",
+        ]
+    )
 
 
 def ensure_committable(hub: Path) -> None:
@@ -134,6 +165,16 @@ def _structural(
 
 def parse(text: str) -> ParsedSession | None:
     """Exchanges of a rendered session, or None if this is not one of ours."""
+    c = COMPACT_PREAMBLE_RE.search(text)
+    if c:
+        return ParsedSession(
+            source=c.group("src"),
+            session_id=c.group("sid"),
+            turns=[],
+            legacy=False,
+            round_trip=True,  # recognised and well-formed; just not per-turn editable
+            compacted=True,
+        )
     m = PREAMBLE_RE.search(text)
     if not m:
         return None

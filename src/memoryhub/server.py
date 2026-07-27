@@ -41,6 +41,7 @@ def _session_rows(hub: Path, c: ck.Checkpoint) -> list[dict]:
                 "exchanges": len(parsed.turns) if parsed else None,
                 "editable": bool(parsed and parsed.editable),
                 "legacy": bool(parsed and parsed.legacy),
+                "compacted": bool(parsed and parsed.compacted),
             }
         )
     return rows
@@ -89,21 +90,26 @@ def _session(hub: Path, ckpt: str, file: str) -> dict:
             "raw": text,
             "exchanges": [],
         }
+    if parsed.compacted:
+        reason = "compacted session — a summary, not exchanges; nothing to edit per-turn"
+    elif parsed.editable:
+        reason = None
+    else:
+        reason = "mh cannot reproduce this file byte-for-byte, so it will not rewrite it"
     return {
         "checkpoint": c.slug,
         "file": path.name,
         "editable": parsed.editable,
         "legacy": parsed.legacy,
-        "reason": None
-        if parsed.editable
-        else "mh cannot reproduce this file byte-for-byte, so it will not rewrite it",
+        "compacted": parsed.compacted,
+        "reason": reason,
+        "raw": text if parsed.compacted else None,
         "source": parsed.source,
         "session_id": parsed.session_id,
         "exchanges": [
             {"index": i, "user": u, "agent": a}
             for i, (u, a) in enumerate(parsed.turns, 1)
         ],
-        "raw": None,
     }
 
 
