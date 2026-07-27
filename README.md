@@ -1,5 +1,7 @@
 # MemoryHub (`mh`)
 
+**English** | [简体中文](README.zh-CN.md)
+
 Git-like checkpoints for AI session context.
 
 Every Claude Code session starts from zero. MemoryHub fixes that: when a session
@@ -29,11 +31,34 @@ uv tool install git+https://github.com/solknight48/memoryhub
 mh skill install           # teach Claude Code sessions the workflow
 ```
 
-Or from a clone, `uv tool install .` (add `-e` to keep it hackable).
-
 **Requirements**: Linux or macOS, git ≥ 2.32, Python ≥ 3.12. `mh` shells out to
 the system `git` and touches nothing platform-specific; the test suite runs on
 both. Windows is untested.
+
+### Updating, and working from a clone
+
+`uv tool install` **copies** the source, so an install made from a path is a
+snapshot: `git pull` in the clone does not change the installed `mh`, and a new
+command like `mh ui` simply will not appear. Pick one:
+
+```sh
+# follow your working tree — every edit and every `git pull` is live,
+# and there is nothing to update afterwards
+uv tool install --force -e .
+
+# or re-snapshot on demand, from the clone or straight from GitHub
+uv tool install --force .
+uv tool install --force git+https://github.com/solknight48/memoryhub
+```
+
+To see which one you have:
+
+```sh
+cat "$(uv tool dir)"/memoryhub/lib/python*/site-packages/memoryhub-*.dist-info/direct_url.json
+```
+
+`"editable": true` means it follows your working tree. If `mh --help` is missing
+a command you know is in the source, this is why.
 
 ## Quickstart
 
@@ -232,10 +257,19 @@ one discover function + one extract function in `src/memoryhub/agents.py`.
 ```sh
 git clone https://github.com/solknight48/memoryhub
 cd memoryhub
-uv run pytest        # full E2E suite (subprocess CLI in a hermetic HOME)
+uv run pytest              # full E2E suite (subprocess CLI in a hermetic HOME)
+uv tool install --force -e .   # so the installed `mh` is the code you are editing
 ```
 
-Layout: `src/memoryhub/{cli,hub,git,purify,checkpoint,load,agents}.py`; the
-Claude Code skill ships as package data in `src/memoryhub/skill/`. `purify.py`
-is vendored from the `purify-context` skill — a parity test pins extraction
-semantics to it, and skips when that skill isn't present on the machine.
+Layout: `src/memoryhub/{cli,hub,git,purify,checkpoint,load,agents,curate,server}.py`;
+the Claude Code skill and the `mh ui` page ship as package data in
+`src/memoryhub/{skill,ui}/`.
+
+- `purify.py` is vendored from the `purify-context` skill — a parity test pins
+  extraction semantics to it, and skips when that skill isn't on the machine.
+- `curate.py` is the only code that parses session markdown (`load`, `show` and
+  `search` read files verbatim), and must never rewrite a file whose
+  parse → re-render isn't byte-identical.
+- `server.py` is stdlib-only on purpose, so `typer` stays the single runtime
+  dependency; its `dispatch()` is a plain function, so the API is tested without
+  a socket.
