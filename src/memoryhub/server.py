@@ -163,13 +163,20 @@ def dispatch(
     return 404, {"error": f"no route {path}"}
 
 
-def _page() -> bytes:
+def _page(budget: int | None) -> bytes:
     from importlib.resources import files
 
-    return files("memoryhub").joinpath("ui/index.html").read_bytes()
+    html = files("memoryhub").joinpath("ui/index.html").read_bytes()
+    marker = b'value="6000"'
+    if html.count(marker) != 1:
+        # The map's budget input lost its default marker — fail loudly rather
+        # than serve a page whose budget silently ignores the flag.
+        raise MhError("ui/index.html no longer carries the default budget marker")
+    value = "" if budget is None else str(budget)
+    return html.replace(marker, f'value="{value}"'.encode(), 1)
 
 
-def make_handler(hub: Path, token: str, read_only: bool):
+def make_handler(hub: Path, token: str, read_only: bool, budget: int | None = 6000):
     class Handler(BaseHTTPRequestHandler):
         server_version = "mh"
         protocol_version = "HTTP/1.1"
@@ -203,7 +210,7 @@ def make_handler(hub: Path, token: str, read_only: bool):
                 self._json(403, {"error": "bad or missing token"})
                 return
             if method == "GET" and parts.path in ("/", "/index.html"):
-                self._send(200, _page(), "text/html; charset=utf-8")
+                self._send(200, _page(budget), "text/html; charset=utf-8")
                 return
             body = {}
             if method == "POST":
@@ -249,9 +256,10 @@ def serve(
     port: int = 0,
     open_browser: bool = True,
     read_only: bool = False,
+    budget: int | None = 6000,
 ) -> None:
     token = secrets.token_urlsafe(16)
-    httpd = ThreadingHTTPServer((host, port), make_handler(hub, token, read_only))
+    httpd = ThreadingHTTPServer((host, port), make_handler(hub, token, read_only, budget))
     url = f"http://{host}:{httpd.server_address[1]}/?t={token}"
     # flush: serve_forever() blocks, so a piped stdout would otherwise hold the
     # URL in the buffer and show the user nothing at all.

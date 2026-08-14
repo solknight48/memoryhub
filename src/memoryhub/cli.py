@@ -742,18 +742,31 @@ def ui(
     read_only: bool = typer.Option(
         False, "--read-only", help="Serve the map without any editing."
     ),
+    budget: str = typer.Option(
+        "6000", "--budget", help="Initial token budget in the map ('none' for no budget)."
+    ),
 ):
     """Open the checkpoint map: visualize the hub and curate it in a browser."""
     from . import server
 
     hub = _hub()
+    budget_value: int | None
+    if budget.strip().lower() == "none":
+        budget_value = None
+    else:
+        try:
+            budget_value = int(budget)
+        except ValueError:
+            raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
+        if budget_value < 0:
+            raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
     if host not in server.ALLOWED_HOSTS:
         print(
             f"mh: binding {host} exposes this hub — it can be edited by anyone who "
             "reaches the port and learns the token",
             file=sys.stderr,
         )
-    server.serve(hub, host=host, port=port, open_browser=browser, read_only=read_only)
+    server.serve(hub, host=host, port=port, open_browser=browser, read_only=read_only, budget=budget_value)
 
 
 @skill_app.command("install")

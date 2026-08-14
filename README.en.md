@@ -72,7 +72,7 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh status` / `mh log` | Position and counts / the hub's git journal. |
 | `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort. |
 | `mh hubs [--prune]` | All registered hubs. |
-| `mh ui [--port N] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
+| `mh ui [--port N] [--budget N\|none] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
 | `mh skill install` | Install the Claude Code skill. |
 
 ## Saving: purified, or compacted

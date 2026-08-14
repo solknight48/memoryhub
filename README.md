@@ -69,7 +69,7 @@ $ mh load                        # 两者的会话，按时间合并
 | `mh status` / `mh log` | 位置与统计 / 中枢的 git 日志。 |
 | `mh sync` | 对 `origin` 执行 `pull --rebase` + `push`，冲突自动中止。 |
 | `mh hubs [--prune]` | 列出所有已注册的中枢。 |
-| `mh ui [--port N] [--read-only]` | 在浏览器里打开检查点地图并整理中枢。 |
+| `mh ui [--port N] [--budget N\|none] [--read-only]` | 在浏览器里打开检查点地图并整理中枢。 |
 | `mh skill install` | 安装 Claude Code skill。 |
 
 ## 保存：提纯，或压缩
