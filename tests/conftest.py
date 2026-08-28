@@ -18,7 +18,7 @@ TIMEOUT = 30
 
 
 @pytest.fixture()
-def ws(tmp_path):
+def ws(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / ".config").mkdir(parents=True)
     gitconfig = home / "gitconfig"
@@ -36,6 +36,17 @@ def ws(tmp_path):
         "TZ": "UTC",
         "LC_ALL": "en_US.UTF-8",
     }
+    # Tests that call curate/server in-process run git in THIS process, so the
+    # hermetic git world must hold here too — CI runners have no global git
+    # identity, and the suite must not depend on the developer's either.
+    for var in (
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_SYSTEM",
+        "GIT_TERMINAL_PROMPT",
+    ):
+        monkeypatch.setenv(var, env[var])
     return {"root": tmp_path, "home": home, "env": env}
 
 
