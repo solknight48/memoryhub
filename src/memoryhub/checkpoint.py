@@ -22,10 +22,13 @@ CKPT_STAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{6}$")
 
 
 def slugify(name: str) -> str:
-    ascii_ = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    slug = re.sub(r"[^a-z0-9]+", "-", ascii_.lower()).strip("-")[:60].strip("-")
+    """Lower-case, hyphen-separated, keeping letters and digits of any script —
+    a Chinese checkpoint name is as first-class as an English one. NFKC folds
+    fullwidth forms so ＡＢＣ１２３ and ABC123 land on the same slug."""
+    norm = unicodedata.normalize("NFKC", name).lower()
+    slug = re.sub(r"[\W_]+", "-", norm).strip("-")[:60].strip("-")
     if not slug:
-        raise MhError("cannot derive a name slug; use ascii letters/digits")
+        raise MhError("cannot derive a name slug; use letters or digits")
     return slug
 
 

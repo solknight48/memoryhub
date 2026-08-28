@@ -41,7 +41,7 @@ def ws(tmp_path):
 
 @pytest.fixture()
 def mh(ws):
-    def run(*args, cwd, check=None, env_extra=None):
+    def run(*args, cwd, check=None, env_extra=None, input=None):
         env = dict(ws["env"])
         if env_extra:
             env.update(env_extra)
@@ -49,6 +49,7 @@ def mh(ws):
             [sys.executable, "-m", "memoryhub", *[str(a) for a in args]],
             cwd=str(cwd),
             env=env,
+            input=input,
             capture_output=True,
             text=True,
             timeout=TIMEOUT,

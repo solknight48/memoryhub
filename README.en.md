@@ -2,6 +2,8 @@
 
 [简体中文](README.md) | **English**
 
+[![CI](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml/badge.svg)](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml)
+
 Git-like checkpoints for AI session context.
 
 Every Claude Code session starts from zero. MemoryHub fixes that: when a session
@@ -68,11 +70,15 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | Warm-start pack: selection + linked closure, time-merged. |
 | `mh link A B` / `mh unlink A B` | Make checkpoints load together / stop that. |
 | `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | Inspect the hub. |
+| `mh rm CKPT[/SESSION] [-x N] [--force]` | Delete a checkpoint, a session, or one exchange. |
+| `mh mv CKPT/SESSION CKPT` / `mh rename CKPT NAME` | Move a session / rename a checkpoint. |
+| `mh edit CKPT/SESSION -x N [--user T] [--agent T]` | Rewrite one side of an exchange. |
 | `mh back [N]` / `mh forward [N]` / `mh goto CKPT` | Move the current pointer. |
 | `mh status` / `mh log` | Position and counts / the hub's git journal. |
 | `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort. |
 | `mh hubs [--prune]` | All registered hubs. |
 | `mh ui [--port N] [--budget N\|none] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
+| `mh hook install [--user] [--remove]` | Automate load/save through Claude Code hooks. |
 | `mh skill install` | Install the Claude Code skill. |
 
 ## Saving: purified, or compacted
@@ -96,6 +102,28 @@ no agent and it fails **deliberately** rather than falling back to purified
 dialog. A compacted save lands under the session's real identity, so it replaces
 a purified save of the same session — one representation per session.
 
+## Hands-free: `mh hook install`
+
+The skill relies on the agent *remembering* to run mh. Hooks remove the
+remembering:
+
+```sh
+mh hook install          # this project (.claude/settings.local.json)
+mh hook install --user   # every project (~/.claude/settings.json)
+```
+
+From the next Claude Code session on: **SessionStart** runs `mh load` and its
+output is injected straight into context, so memory arrives before the first
+word; **SessionEnd** and **PreCompact** run `mh hook save` — the latter
+snapshots the dialog right before compaction would destroy it.
+
+The handlers are deliberately forgiving: no hub, no current checkpoint, or
+nothing to save all exit 0 quietly, so a `--user` install never disturbs a
+project that does not use mh. They also respect choices made mid-session — a
+session already stored `--compact` is kept as is, and one routed `--to` another
+checkpoint is updated there rather than duplicated. Undo any time with
+`mh hook install --remove`.
+
 ## The map: `mh ui`
 
 ```console
@@ -108,7 +136,9 @@ current pointer ringed, and the sessions the next `mh load` would include picked
 out at your token budget. Click through to **delete or rewrite a single
 exchange**, delete or move sessions, and rename, delete or link checkpoints.
 Every change is a commit in the hub, so `git -C .memoryhub revert` is the undo.
-`--read-only` serves the map with editing disabled.
+`--read-only` serves the map with all editing hidden. The same surgery works
+from a terminal — `mh rm`, `mh mv`, `mh rename`, `mh edit` — so an agent can
+curate memory on request without a browser.
 
 Safety: loopback-only, a one-shot token minted per run, and the `Host` header
 checked; the page is self-contained and works offline. **mh will not rewrite a
@@ -138,6 +168,11 @@ re-running later picks up only what's new.
 - **Loading**: `mh load` takes the current checkpoint (or the ones you name),
   expands across links, and emits whole sessions oldest → newest within
   `--budget` (default ~6000 tokens, keeping the newest contiguous suffix).
+- **Token estimates are CJK-aware**: ~1 token per CJK character, ~4 ASCII
+  characters per token — close enough for budgeting, with no tokenizer
+  dependency.
+- **Names in any script**: `mh checkpoint 数据管道` is as first-class as
+  `mh checkpoint backtest`.
 - **Every mutation is a git commit.** Undo, rename, delete, merge: plain
   `git -C .memoryhub ...` — the hub is a normal repo.
 - **Excluded, not ignored**: `mh init` writes `.git/info/exclude` in the project

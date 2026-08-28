@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,10 +13,25 @@ from .hub import MhError, read_current
 
 DEFAULT_BUDGET = 6000  # one definition; the CLI, the API and the page share it
 
+# CJK scripts run ~1 token per character where ASCII prose runs ~4 characters
+# per token; a plain len//4 undercounts a Chinese session ~4x and the budget
+# would pack four times more context than asked for.
+CJK_RE = re.compile(
+    "["
+    "\u3000-\u30ff"  # CJK punctuation, hiragana, katakana
+    "\u3400-\u4dbf"  # CJK extension A
+    "\u4e00-\u9fff"  # CJK unified
+    "\uac00-\ud7a3"  # hangul syllables
+    "\uf900-\ufaff"  # CJK compatibility
+    "\uff00-\uffef"  # fullwidth forms
+    "]"
+)
+
 
 def estimate_tokens(text: str) -> int:
-    # Documented estimate (~4 chars/token); no tokenizer dependency.
-    return max(1, len(text) // 4)
+    # Still a heuristic — deliberately no tokenizer dependency.
+    cjk = len(CJK_RE.findall(text))
+    return max(1, cjk + (len(text) - cjk) // 4)
 
 
 @dataclass
@@ -77,6 +93,7 @@ def build(
 
     over_budget = False
     if budget is None:
+        keep_set = set(range(len(blocks)))
         kept = blocks
         used = sum(b["tokens"] for b in blocks)
     else:
@@ -97,9 +114,10 @@ def build(
                 used += tokens
             else:
                 break
+        keep_set = set(keep_idx)
         kept = [blocks[i] for i in sorted(keep_idx)]
 
-    omitted = [b["id"] for b in blocks if b not in kept]
+    omitted = [b["id"] for i, b in enumerate(blocks) if i not in keep_set]
 
     try:
         sha = git.run(hub, "rev-parse", "--short", "HEAD").strip()

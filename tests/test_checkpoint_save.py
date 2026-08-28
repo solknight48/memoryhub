@@ -25,6 +25,26 @@ def test_checkpoint_create_and_collision(mh, hub_project):
     assert "already exists" in p.stderr
 
 
+def test_checkpoint_names_can_be_chinese(mh, ws, hub_project):
+    p = mh("checkpoint", "数据管道", cwd=hub_project, check=0)
+    assert "checkpoint '数据管道' created (current)" in p.stdout
+    tr = write_transcript(
+        ws["home"], hub_project, SID_A, make_records([("你好", "世界")])
+    )
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    out = mh("load", cwd=hub_project, check=0).stdout
+    assert "loaded: 数据管道" in out and "你好" in out
+    # mixed and fullwidth names slug like anything else; punctuation folds away
+    p = mh("checkpoint", "回测：v２", cwd=hub_project, check=0)
+    assert "'回测-v2'" in p.stdout
+
+
+def test_checkpoint_name_without_any_letters_fails(mh, hub_project):
+    p = mh("checkpoint", "!!!", cwd=hub_project)
+    assert p.returncode == 1
+    assert "letters or digits" in p.stderr
+
+
 def test_save_requires_current(mh, hub_project):
     p = mh("save", cwd=hub_project)
     assert p.returncode == 1
@@ -130,10 +150,15 @@ def test_list_output_and_json(mh, ws, hub_project):
     assert "alpha" in p.stdout and "beta" in p.stdout
     beta_line = next(line for line in p.stdout.splitlines() if "beta" in line)
     assert beta_line.lstrip().startswith("*")  # current marker
+    alpha_line = next(line for line in p.stdout.splitlines() if "alpha" in line)
+    assert "2026-07-10 04:01" in alpha_line  # last save shown per checkpoint
+    assert "—" in beta_line  # no sessions yet
 
     data = json.loads(mh("list", "--json", cwd=hub_project, check=0).stdout)
     assert [d["checkpoint"] for d in data] == ["alpha", "beta"]
     assert data[0]["sessions"] == 1
+    assert data[0]["last_save"] == "2026-07-10_0401"
+    assert data[1]["last_save"] is None
     assert data[1]["current"] is True
 
 

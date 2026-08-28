@@ -163,20 +163,38 @@ def dispatch(
     return 404, {"error": f"no route {path}"}
 
 
-def _page(budget: int | None) -> bytes:
+CONFIG_MARKER = b'<script id="mh-config" type="application/json">{}</script>'
+
+
+def _page(budget: int | None, read_only: bool, hub: Path) -> bytes:
     from importlib.resources import files
 
     html = files("memoryhub").joinpath("ui/index.html").read_bytes()
-    marker = b'value="6000"'
-    if html.count(marker) != 1:
-        # The map's budget input lost its default marker — fail loudly rather
-        # than serve a page whose budget silently ignores the flag.
-        raise MhError("ui/index.html no longer carries the default budget marker")
-    value = "" if budget is None else str(budget)
-    return html.replace(marker, f'value="{value}"'.encode(), 1)
+    if html.count(CONFIG_MARKER) != 1:
+        # The page lost its config slot — fail loudly rather than serve a map
+        # that silently ignores the flags it was started with.
+        raise MhError("ui/index.html no longer carries the config marker")
+    try:
+        from importlib.metadata import version as pkg_version
+
+        version = pkg_version("memoryhub")
+    except Exception:
+        version = ""
+    cfg = {
+        "budget": budget,
+        "readOnly": read_only,
+        "hub": str(hub),
+        "version": version,
+    }
+    # Escape '<' so no value can ever close the script element early.
+    payload = json.dumps(cfg, ensure_ascii=False).replace("<", "\\u003c").encode()
+    filled = CONFIG_MARKER.replace(b"{}", payload)
+    return html.replace(CONFIG_MARKER, filled, 1)
 
 
-def make_handler(hub: Path, token: str, read_only: bool, budget: int | None = 6000):
+def make_handler(
+    hub: Path, token: str, read_only: bool, budget: int | None = load.DEFAULT_BUDGET
+):
     class Handler(BaseHTTPRequestHandler):
         server_version = "mh"
         protocol_version = "HTTP/1.1"
@@ -210,7 +228,7 @@ def make_handler(hub: Path, token: str, read_only: bool, budget: int | None = 60
                 self._json(403, {"error": "bad or missing token"})
                 return
             if method == "GET" and parts.path in ("/", "/index.html"):
-                self._send(200, _page(budget), "text/html; charset=utf-8")
+                self._send(200, _page(budget, read_only, hub), "text/html; charset=utf-8")
                 return
             body = {}
             if method == "POST":
@@ -256,7 +274,7 @@ def serve(
     port: int = 0,
     open_browser: bool = True,
     read_only: bool = False,
-    budget: int | None = 6000,
+    budget: int | None = load.DEFAULT_BUDGET,
 ) -> None:
     token = secrets.token_urlsafe(16)
     httpd = ThreadingHTTPServer((host, port), make_handler(hub, token, read_only, budget))

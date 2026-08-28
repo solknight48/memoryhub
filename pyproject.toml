@@ -1,11 +1,16 @@
 [project]
 name = "memoryhub"
-version = "0.1.0"
+version = "0.2.0"
 description = "mh — git-like checkpoints for purified AI session context"
+readme = "README.en.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = ["typer"]
+
+[project.urls]
+Homepage = "https://github.com/solknight48/memoryhub"
+Issues = "https://github.com/solknight48/memoryhub/issues"
 
 [project.scripts]
 mh = "memoryhub.cli:app"

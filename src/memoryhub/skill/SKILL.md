@@ -18,7 +18,9 @@ description: >-
 checkpoints load together, their sessions merged in time order.
 
 ## Session start
-1. Run `mh load` and treat the output as prior project memory. The header says
+1. If the context already contains an `<!-- mh | loaded:` header, a
+   SessionStart hook has run `mh load` for you — do not run it again. Otherwise
+   run `mh load` and treat the output as prior project memory. The header says
    which checkpoints were included. Trust it over guessing; if it contradicts
    the code, the code wins.
 2. `mh status` shows the current checkpoint, position, and staleness.
@@ -27,7 +29,8 @@ checkpoints load together, their sessions merged in time order.
 - `mh save` — purify THIS session (mechanical, no LLM cost) into the current
   checkpoint. Run it at session end, and whenever the user asks to save or
   checkpoint. Re-running later in the same session simply updates the saved
-  file — never a duplicate.
+  file — never a duplicate. (If `mh hook install` is set up, a SessionEnd hook
+  saves automatically; a manual `mh save` is still harmless.)
 - `mh save [<checkpoint>] --compact --file <md>` — store a **summary you write**
   instead of the full purified dialog, when the user asks for a compact/
   summarized save (`--compact`, "compact this session", "压缩保存"). mh has no
@@ -47,10 +50,20 @@ checkpoints load together, their sessions merged in time order.
   Without `--file` the command fails by design; do not retry without `--compact`
   unless the user asks for the purified save instead.
 - `mh checkpoint <name>` — start a new checkpoint (becomes current). Only when
-  the user declares a new workstream or stage.
+  the user declares a new workstream or stage. Names may be in any script
+  (`mh checkpoint 数据管道` is fine).
 - `mh link A B` / `mh unlink A B` — only on explicit user request.
+- Curation (`mh rm <ckpt>[/<session>] [-x N]`, `mh mv`, `mh rename`,
+  `mh edit <ckpt>/<session> -x N --user/--agent`) — only on explicit user
+  request ("delete that exchange", "移除这段", "rename the checkpoint"). Every
+  curation is a hub commit; tell the user `git -C .memoryhub revert HEAD` is
+  the undo.
 - Navigation (`mh back`, `mh forward`, `mh goto <ckpt>`) — only on explicit
   user request; afterwards tell the user which checkpoint is now current.
+- If the user wants load/save to happen automatically, offer `mh hook install`
+  (project) or `mh hook install --user` (all projects): SessionStart injects
+  `mh load`, SessionEnd and PreCompact run the save. Run it only on approval —
+  it edits Claude Code settings.
 
 ## Taking over a project with existing history
 When the user asks to take over a project, import old sessions, or backfill

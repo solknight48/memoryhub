@@ -2,6 +2,16 @@ import json
 import re
 
 from conftest import make_records, write_transcript
+from memoryhub.load import estimate_tokens
+
+
+def test_token_estimate_ascii_and_cjk():
+    """ASCII prose ~4 chars/token; CJK ~1 token/char — a Chinese session must
+    not be undercounted 4x or the budget packs far more than asked."""
+    assert estimate_tokens("hello world " * 10) == 30  # 120 chars / 4
+    assert estimate_tokens("这是一个中文句子" * 15) == 120  # 120 CJK chars
+    mixed = "abcd" + "中文"
+    assert estimate_tokens(mixed) == 3  # 4 ascii chars -> 1, 2 CJK -> 2
 
 SIDS = {
     "alpha1": "aaaa1111-0000-4000-8000-000000000001",
