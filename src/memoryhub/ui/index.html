@@ -97,9 +97,35 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
 .ex header { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
              background: var(--page); border: 0; border-bottom: 1px solid var(--border); }
 .ex .role { font-size: 11px; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); }
-.ex .body { padding: 10px 12px; white-space: pre-wrap; word-wrap: break-word;
-            font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; }
-.ex .body.agent { border-top: 1px solid var(--grid); }
+/* one turn = one readable column: prose face, capped measure, role color-coded */
+.turn { padding: 12px 16px; }
+.turn.user { background: color-mix(in srgb, var(--accent) 5%, transparent);
+             border-left: 3px solid var(--accent); }
+.turn.agent { border-left: 3px solid var(--grid); border-top: 1px solid var(--grid); }
+.rolechip { display: inline-block; font-size: 10.5px; font-weight: 650; letter-spacing: 0.04em;
+            text-transform: uppercase; padding: 1px 8px; border-radius: 999px; margin-bottom: 8px; }
+.rolechip.user { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rolechip.agent { color: var(--text-secondary); background: color-mix(in srgb, var(--muted) 18%, transparent); }
+.md { font: 13.5px/1.65 system-ui, sans-serif; }
+.md p { margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: break-word; max-width: 76ch; }
+.md p:last-child, .md ul:last-child, .md ol:last-child, .md pre:last-child { margin-bottom: 0; }
+.md pre { background: var(--page); border: 1px solid var(--grid); border-radius: 8px;
+          padding: 10px 12px; margin: 0 0 10px; overflow-x: auto; }
+.md pre code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: none; padding: 0; }
+.md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em;
+           background: color-mix(in srgb, var(--accent) 8%, transparent);
+           padding: 1px 4px; border-radius: 4px; overflow-wrap: break-word; }
+.md ul, .md ol { margin: 0 0 10px; padding-left: 22px; max-width: 72ch; }
+.md li { margin: 2px 0; white-space: pre-wrap; overflow-wrap: break-word; }
+.md .md-h1, .md .md-h2, .md .md-h3, .md .md-h4 { font-weight: 650; margin: 14px 0 6px; }
+.md .md-h1 { font-size: 15px; } .md .md-h2 { font-size: 14px; }
+.md .md-h3 { font-size: 13.5px; } .md .md-h4 { font-size: 13px; color: var(--text-secondary); }
+.md hr { border: 0; border-top: 1px solid var(--grid); margin: 12px 0; }
+.md .quote { border-left: 3px solid var(--baseline); padding-left: 10px; margin: 0 0 10px;
+             color: var(--text-secondary); white-space: pre-wrap; max-width: 74ch; }
+.md a { color: var(--accent); }
+.rawpre { white-space: pre-wrap; overflow-wrap: break-word; margin: 0;
+          font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .row.end { justify-content: flex-end; }
 .muted { color: var(--muted); }
@@ -270,6 +296,99 @@ const svg = (tag, props) => {
   return n;
 };
 
+// --- markdown-lite, built entirely from DOM nodes (never innerHTML) --------
+// Dialog is markdown; showing it raw made every session a wall of asterisks.
+// This renders the safe common subset — fences, headings, lists, quotes,
+// `code`, **bold**, links — and leaves anything else exactly as typed.
+
+function inline(text) {
+  const frag = document.createDocumentFragment();
+  const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    if (m[1]) frag.appendChild(el("code", { text: m[1].slice(1, -1) }));
+    else if (m[2]) frag.appendChild(el("strong", { text: m[2].slice(2, -2) }));
+    else frag.appendChild(el("a", { text: m[3], href: m[4], target: "_blank", rel: "noopener noreferrer" }));
+    last = re.lastIndex;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+  return frag;
+}
+
+function md(text) {
+  const root = el("div", { class: "md" });
+  const lines = String(text).split("\n");
+  let i = 0, para = [];
+  const flushP = () => {
+    if (!para.length) return;
+    const p = el("p", {});
+    p.appendChild(inline(para.join("\n")));
+    root.appendChild(p);
+    para = [];
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    const f = line.match(/^\s*(```|~~~)/);
+    if (f) {  // fenced code: verbatim, same token closes (as in curate.py)
+      flushP();
+      const token = f[1], buf = [];
+      i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith(token)) { buf.push(lines[i]); i++; }
+      if (i < lines.length) i++;  // the closing fence
+      const pre = el("pre", {});
+      pre.appendChild(el("code", { text: buf.join("\n") }));
+      root.appendChild(pre);
+      continue;
+    }
+    const h = line.match(/^(#{1,4}) +(.*)$/);
+    if (h) {
+      flushP();
+      const d = el("div", { class: "md-h" + h[1].length });
+      d.appendChild(inline(h[2]));
+      root.appendChild(d);
+      i++; continue;
+    }
+    if (/^\s*-{3,}\s*$/.test(line)) { flushP(); root.appendChild(el("hr")); i++; continue; }
+    if (/^> ?/.test(line)) {
+      flushP();
+      const qb = [];
+      while (i < lines.length && /^> ?/.test(lines[i])) { qb.push(lines[i].replace(/^> ?/, "")); i++; }
+      const d = el("div", { class: "quote" });
+      d.appendChild(inline(qb.join("\n")));
+      root.appendChild(d);
+      continue;
+    }
+    const ordered = /^\s*\d+[.)] +/.test(line);
+    const itemRe = /^\s*[-*+] +/.test(line) ? /^\s*[-*+] +(.*)$/
+                 : ordered ? /^\s*\d+[.)] +(.*)$/ : null;
+    if (itemRe) {
+      flushP();
+      const listEl = el(ordered ? "ol" : "ul", {});
+      let item = null;
+      while (i < lines.length) {
+        const m2 = lines[i].match(itemRe);
+        if (m2) {
+          item = el("li", {});
+          item.appendChild(inline(m2[1]));
+          listEl.appendChild(item);
+          i++;
+        } else if (item && /^\s+\S/.test(lines[i])) {  // continuation line
+          item.appendChild(document.createTextNode("\n" + lines[i].trim()));
+          i++;
+        } else break;
+      }
+      root.appendChild(listEl);
+      continue;
+    }
+    if (!line.trim()) { flushP(); i++; continue; }
+    para.push(line);
+    i++;
+  }
+  flushP();
+  return root;
+}
+
 function tip(evt, lines) {
   const t = $("tip");
   t.textContent = "";
@@ -412,10 +531,15 @@ async function openSession(slug, file) {
   if (!data.editable) {
     host.appendChild(el("p", { class: "empty", text: data.reason || "not editable" }));
   }
-  if (data.compacted && data.raw) {
+  if (data.raw) {
+    // compacted: a summary in markdown, render it; unknown format: verbatim,
+    // pretending to know its shape would misrender it
     const card = el("div", { class: "ex" });
-    card.appendChild(el("header", {}, el("span", { class: "role", text: "compacted summary" })));
-    card.appendChild(el("div", { class: "body", text: data.raw }));
+    card.appendChild(el("header", {}, el("span", { class: "role",
+      text: data.compacted ? "compacted summary" : "raw file" })));
+    const body = el("div", { class: "turn" });
+    body.appendChild(data.compacted ? md(data.raw) : el("pre", { class: "rawpre", text: data.raw }));
+    card.appendChild(body);
     host.appendChild(card);
   }
   if (data.legacy && data.editable) {
@@ -440,10 +564,15 @@ function exchangeCard(data, ex) {
     } }));
   }
   card.appendChild(head);
-  card.appendChild(el("div", { class: "role", style: "padding:8px 12px 0", text: "User" }));
-  card.appendChild(el("div", { class: "body", text: ex.user }));
-  card.appendChild(el("div", { class: "role", style: "padding:8px 12px 0", text: "Agent" }));
-  card.appendChild(el("div", { class: "body agent", text: ex.agent || "(no textual reply captured)" }));
+  const user = el("div", { class: "turn user" },
+    el("span", { class: "rolechip user", text: "User" }));
+  user.appendChild(md(ex.user));
+  card.appendChild(user);
+  const agent = el("div", { class: "turn agent" },
+    el("span", { class: "rolechip agent", text: "Agent" }));
+  if (ex.agent) agent.appendChild(md(ex.agent));
+  else agent.appendChild(el("p", { class: "empty", text: "(no textual reply captured)" }));
+  card.appendChild(agent);
   return card;
 }
 
