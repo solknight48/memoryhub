@@ -6,36 +6,45 @@
 <meta name="referrer" content="no-referrer">
 <title>mh — checkpoint map</title>
 <style>
+/* HEY-inspired: warm cream canvas, white cards, HEY purple, mint pills,
+   bright avatar circles, big friendly type. */
 :root {
   color-scheme: light;
-  --surface-1: #fcfcfb;
-  --page: #f9f9f7;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --muted: #898781;
-  --grid: #e1e0d9;
-  --baseline: #c3c2b7;
-  --border: rgba(11, 11, 11, 0.10);
-  --accent: #2a78d6;
-  --neutral-mark: #898781;
+  --surface-1: #ffffff;
+  --page: #faf6f0;
+  --text-primary: #161310;
+  --text-secondary: #57524b;
+  --muted: #8d867c;
+  --grid: #efe8dd;
+  --baseline: #d9d0c2;
+  --border: rgba(22, 19, 16, 0.08);
+  --accent: #5522fa;
+  --accent-soft: #f1ecff;
+  --mint: #b9f0d3;
+  --mint-ink: #0b3d24;
+  --neutral-mark: #b3aa9d;
   --critical: #d03b3b;
-  --good: #006300;
+  --good: #0a7d43;
+  --avatar-ink: #161310;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --surface-1: #1a1a19;
-    --page: #0d0d0d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --baseline: #383835;
-    --border: rgba(255, 255, 255, 0.10);
-    --accent: #3987e5;
-    --neutral-mark: #898781;
-    --critical: #d03b3b;
-    --good: #0ca30c;
+    --surface-1: #211d18;
+    --page: #141110;
+    --text-primary: #f7f4ef;
+    --text-secondary: #c9c2b8;
+    --muted: #8d867c;
+    --grid: #35302a;
+    --baseline: #48413a;
+    --border: rgba(247, 244, 239, 0.10);
+    --accent: #9d8cff;
+    --accent-soft: #2a2440;
+    --mint: #1f4d36;
+    --mint-ink: #b9f0d3;
+    --neutral-mark: #6a635a;
+    --critical: #e0655a;
+    --good: #39c47a;
   }
 }
 * { box-sizing: border-box; }
@@ -46,20 +55,21 @@ body {
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 header {
-  display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
-  padding: 12px 20px; border-bottom: 1px solid var(--border);
-  background: var(--surface-1);
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  padding: 14px 24px; background: var(--page);
 }
-header h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+header h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: -0.02em; }
 header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
 .spacer { flex: 1; }
-main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+main { padding: 8px 24px 28px; max-width: 1100px; margin: 0 auto; }
+.tagline { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 4px 0 18px; }
 section {
   background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 10px; padding: 16px; margin-bottom: 20px;
+  border-radius: 20px; padding: 22px 24px; margin-bottom: 22px;
+  box-shadow: 0 1px 2px rgba(20, 15, 5, 0.03), 0 12px 32px -28px rgba(20, 15, 5, 0.35);
 }
-h2 { font-size: 13px; margin: 0 0 12px; font-weight: 650; color: var(--text-secondary);
-     text-transform: uppercase; letter-spacing: 0.04em; }
+h2 { font-size: 17px; margin: 0 0 14px; font-weight: 800; color: var(--text-primary);
+     letter-spacing: -0.01em; }
 .mapwrap { overflow-x: auto; }
 svg { display: block; }
 svg text { font: 11px system-ui, sans-serif; }
@@ -68,32 +78,45 @@ svg text { font: 11px system-ui, sans-serif; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .key { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 button {
-  font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--surface-1);
-  color: var(--text-primary); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 650; padding: 6px 14px;
+  border-radius: 999px; border: 1px solid var(--baseline);
+  background: var(--surface-1); color: var(--text-primary); cursor: pointer;
 }
-button:hover { border-color: var(--baseline); }
-button.danger { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.danger { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+button.danger:hover { border-color: var(--critical); color: var(--critical); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { color: #fff; opacity: 0.92; }
+button.mint { background: var(--mint); border-color: transparent; color: var(--mint-ink); font-weight: 700; }
+button.mint:hover { color: var(--mint-ink); opacity: 0.88; }
 input[type=number], textarea {
-  font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+  font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--baseline); background: var(--surface-1); color: var(--text-primary);
   width: 100%;
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
-           line-height: 1.55; resize: vertical; min-height: 90px; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
-th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
-td.num { text-align: right; font-variant-numeric: tabular-nums; }
-tr.clickable { cursor: pointer; }
-tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.file { font-family: ui-monospace, monospace; font-size: 12px; }
-.bar { height: 6px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+           line-height: 1.55; resize: vertical; min-height: 90px; border-radius: 12px; }
+/* sessions as a Screener-style list: bright avatar circle, bold title with a
+   ‹key›, then one gray line of meta — preview */
+.srow { display: flex; align-items: flex-start; gap: 14px; padding: 14px 12px;
+        border-top: 1px solid var(--grid); cursor: pointer; border-radius: 14px; }
+.srow:first-child { border-top: 0; }
+.srow:hover { background: var(--accent-soft); }
+.srow:hover + .srow { border-top-color: transparent; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; flex: none;
+          display: flex; align-items: center; justify-content: center;
+          font-weight: 800; font-size: 14px; color: var(--avatar-ink); }
+.smain { flex: 1; min-width: 0; }
+.stitle { font-weight: 750; font-size: 14.5px; }
+.stitle .key { color: var(--muted); font-weight: 500; font-size: 12.5px;
+               font-family: ui-monospace, monospace; margin-left: 4px; }
+.spreview { color: var(--text-secondary); font-size: 13px; line-height: 1.45; margin-top: 3px;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sacts { display: flex; gap: 8px; flex: none; align-self: center; }
 .badge { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 999px;
          border: 1px solid var(--border); color: var(--text-secondary); margin-left: 6px; }
 .badge.warn { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
-.ex { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.ex { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
 .ex header { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
              background: var(--page); border: 0; border-bottom: 1px solid var(--border); }
 .ex .role { font-size: 11px; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); }
@@ -106,9 +129,15 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
             text-transform: uppercase; padding: 1px 8px; border-radius: 999px; margin-bottom: 8px; }
 .rolechip.user { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .rolechip.agent { color: var(--text-secondary); background: color-mix(in srgb, var(--muted) 18%, transparent); }
+.modelchip { display: inline-flex; align-items: center; vertical-align: middle; gap: 5px;
+             font-size: 10.5px; font-weight: 600; padding: 2px 9px 2px 7px;
+             border-radius: 999px; margin: 0 0 8px 6px; color: var(--text-secondary);
+             border: 1px solid var(--baseline); }
+.modelchip i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .md { font: 13.5px/1.65 system-ui, sans-serif; }
 .md p { margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: break-word; max-width: 76ch; }
-.md p:last-child, .md ul:last-child, .md ol:last-child, .md pre:last-child { margin-bottom: 0; }
+.md p:last-child, .md ul:last-child, .md ol:last-child, .md pre:last-child,
+.md .md-table:last-child { margin-bottom: 0; }
 .md pre { background: var(--page); border: 1px solid var(--grid); border-radius: 8px;
           padding: 10px 12px; margin: 0 0 10px; overflow-x: auto; }
 .md pre code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: none; padding: 0; }
@@ -124,6 +153,15 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
 .md .quote { border-left: 3px solid var(--baseline); padding-left: 10px; margin: 0 0 10px;
              color: var(--text-secondary); white-space: pre-wrap; max-width: 74ch; }
 .md a { color: var(--accent); }
+.md .md-table { overflow-x: auto; margin: 0 0 10px; }
+.md table { border-collapse: collapse; width: max-content; min-width: 100%;
+            font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.md th, .md td { text-align: left; vertical-align: top;
+                 padding: 6px 18px 6px 0; overflow-wrap: break-word; }
+.md th:last-child, .md td:last-child { padding-right: 0; }
+.md th { font-weight: 650; white-space: nowrap; border-bottom: 2px solid var(--baseline); }
+.md td { border-bottom: 1px solid var(--grid); }
+.md tbody tr:last-child td { border-bottom: 0; }
 .rawpre { white-space: pre-wrap; overflow-wrap: break-word; margin: 0;
           font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -146,12 +184,12 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
 #tip.show { opacity: 1; }
 #menu {
   position: fixed; z-index: 10; background: var(--surface-1);
-  border: 1px solid var(--baseline); border-radius: 8px; padding: 6px;
+  border: 1px solid var(--baseline); border-radius: 14px; padding: 6px;
   box-shadow: 0 6px 20px rgba(0,0,0,.22); min-width: 160px; max-height: 60vh; overflow-y: auto;
 }
 #menu .menu-label { font-size: 11px; color: var(--muted); padding: 2px 8px 6px; }
 #menu button { display: block; width: 100%; text-align: left; border: 0;
-               background: transparent; padding: 6px 8px; border-radius: 6px; }
+               background: transparent; padding: 6px 10px; border-radius: 8px; }
 #menu button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 </style>
 </head>
@@ -166,11 +204,12 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
     <input type="number" id="budget" min="0" step="500"
            style="width:90px;display:inline-block;margin-left:6px">
   </label>
-  <button id="newckpt">+ checkpoint</button>
+  <button id="newckpt" class="mint">+ checkpoint</button>
   <button id="reload">refresh</button>
 </header>
 
 <main>
+  <p class="tagline">Everything your sessions learned, one checkpoint at a time.</p>
   <section>
     <h2>Timeline</h2>
     <div class="mapwrap"><svg id="map" role="img" aria-label="Checkpoint timeline"></svg></div>
@@ -191,10 +230,7 @@ tr.clickable:hover td { background: color-mix(in srgb, var(--accent) 6%, transpa
       <span class="spacer" style="flex:1"></span>
       <button id="ck-delete" class="danger">delete checkpoint</button>
     </div>
-    <table>
-      <thead><tr><th>session</th><th class="num">exch.</th><th class="num">~tokens</th><th style="width:90px"></th><th style="width:150px"></th></tr></thead>
-      <tbody id="sessions"></tbody>
-    </table>
+    <div id="sessions"></div>
   </section>
 
   <section id="sessec" hidden>
@@ -316,6 +352,21 @@ function inline(text) {
   return frag;
 }
 
+// One row of a pipe table: split on unescaped |, drop the optional outer pipes.
+function cells(line) {
+  const out = [];
+  let cur = "";
+  for (let k = 0; k < line.length; k++) {
+    if (line[k] === "\\" && line[k + 1] === "|") { cur += "|"; k++; }
+    else if (line[k] === "|") { out.push(cur); cur = ""; }
+    else cur += line[k];
+  }
+  out.push(cur);
+  if (!out[0].trim()) out.shift();
+  if (out.length && !out[out.length - 1].trim()) out.pop();
+  return out.map((c) => c.trim());
+}
+
 function md(text) {
   const root = el("div", { class: "md" });
   const lines = String(text).split("\n");
@@ -348,6 +399,38 @@ function md(text) {
       d.appendChild(inline(h[2]));
       root.appendChild(d);
       i++; continue;
+    }
+    // a pipe table, only when the second line is a real delimiter row of the
+    // same width — otherwise prose with a stray | stays a paragraph
+    if (line.includes("|") && i + 1 < lines.length) {
+      const head = cells(line), delim = cells(lines[i + 1]);
+      if (head.length && head.length === delim.length &&
+          delim.every((c) => /^:?-+:?$/.test(c))) {
+        flushP();
+        const aligns = delim.map((c) => c.endsWith(":") ? (c.startsWith(":") ? "center" : "right")
+                                      : c.startsWith(":") ? "left" : null);
+        const cellEl = (tag, text, k) => {
+          const n = el(tag, aligns[k] ? { style: "text-align:" + aligns[k] } : {});
+          n.appendChild(inline(text));
+          return n;
+        };
+        const rowEl = (tag, vals) => {
+          const tr = el("tr", {});
+          head.forEach((_, k) => tr.appendChild(cellEl(tag, vals[k] || "", k)));
+          return tr;
+        };
+        const table = el("table", {});
+        table.appendChild(el("thead", {}, rowEl("th", head)));
+        const body = el("tbody", {});
+        i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].includes("|")) {
+          body.appendChild(rowEl("td", cells(lines[i])));  // short rows pad, long ones clip
+          i++;
+        }
+        table.appendChild(body);
+        root.appendChild(el("div", { class: "md-table" }, table));
+        continue;
+      }
     }
     if (/^\s*-{3,}\s*$/.test(line)) { flushP(); root.appendChild(el("hr")); i++; continue; }
     if (/^> ?/.test(line)) {
@@ -478,6 +561,53 @@ function drawMap() {
 
 // --- checkpoint panel ------------------------------------------------------
 
+// bright HEY-style avatar circles: deterministic color from the session key
+const AVATARS = ["#f5d652", "#f2846b", "#c7e86b", "#7fd8f5", "#c9b8f9", "#8fe3b0"];
+function avatarColor(key) {
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATARS[h % AVATARS.length];
+}
+function sessionKey(file) {
+  return file.slice(16).replace(/\.md$/, "");
+}
+function initialsFor(file) {
+  const key = sessionKey(file);
+  if (key.startsWith("pi-")) return "PI";
+  if (key.startsWith("cx-")) return "CX";
+  return (key.slice(0, 2) || "??").toUpperCase();
+}
+// "claude-sonnet-4-5-20250929" -> "Sonnet 4.5". Anything mh does not recognise
+// is shown exactly as the session file records it — a raw id is short and
+// honest, and inventing a pretty name for an unknown model would not be.
+const FAMILIES = ["opus", "sonnet", "haiku", "fable", "mythos"];
+function modelLabel(id) {
+  const s = id.toLowerCase()
+    .replace(/^[a-z]{2}\.anthropic\.|^anthropic[./]/, "")  // us.anthropic.claude-…
+    .replace(/-v\d+:\d+$/, "")                             // bedrock -v1:0
+    .replace(/[-@]\d{8}$/, "");                            // dated snapshots
+  const m = s.match(/^claude-(?:(\d+)(?:-(\d+))?-)?([a-z]+)(?:-(\d+)(?:-(\d+))?)?$/);
+  if (!m) return id;
+  const [, preMajor, preMinor, family, postMajor, postMinor] = m;
+  const major = preMajor || postMajor, minor = preMinor || postMinor;
+  if (!major || !FAMILIES.includes(family)) return id;
+  return family[0].toUpperCase() + family.slice(1) + " " + major + (minor ? "." + minor : "");
+}
+
+function modelChip(id) {
+  const chip = el("span", { class: "modelchip", title: id });  // raw id on hover
+  const dot = el("i", {});
+  dot.style.background = avatarColor(id);
+  chip.appendChild(dot);
+  chip.appendChild(document.createTextNode(modelLabel(id)));
+  return chip;
+}
+
+function niceStamp(file) {
+  const s = file.slice(0, 15);  // YYYY-MM-DD_HHMM
+  return `${s.slice(0, 10)} ${s.slice(11, 13)}:${s.slice(13, 15)}`;
+}
+
 function selectCheckpoint(slug) {
   SEL_CK = slug;
   $("sessec").hidden = true;
@@ -486,35 +616,37 @@ function selectCheckpoint(slug) {
   $("ckptsec").hidden = false;
   $("ckpttitle").textContent = `${c.slug} · created ${c.created.replace("_", " ")}`;
   const omitted = new Set(DATA.load.omitted);
-  const tbody = $("sessions");
-  tbody.textContent = "";
+  const list = $("sessions");
+  list.textContent = "";
   if (!c.sessions.length) {
-    tbody.appendChild(el("tr", {}, el("td", { colspan: 5, class: "empty",
-      text: "no sessions in this checkpoint yet" })));
+    list.appendChild(el("div", { class: "empty",
+      text: "Nothing here yet — this checkpoint is waiting for its first session." }));
   }
-  const maxTok = Math.max(1, ...c.sessions.map((s) => s.tokens));
   c.sessions.forEach((s) => {
-    const nameCell = el("td", {}, el("span", { class: "file", text: s.file }));
-    if (omitted.has(s.id)) nameCell.appendChild(el("span", { class: "badge", text: "over budget" }));
-    if (s.compacted) nameCell.appendChild(el("span", { class: "badge", text: "compacted" }));
-    if (s.legacy) nameCell.appendChild(el("span", { class: "badge", text: "Q&A format" }));
-    if (!s.editable && !s.compacted) nameCell.appendChild(el("span", { class: "badge warn", text: "read-only" }));
-    const bar = el("div", { class: "bar" });
-    bar.style.width = Math.round(70 * (s.tokens / maxTok)) + "px";
-    const tr = el("tr", { class: "clickable" },
-      nameCell,
-      // a compacted session summarises N exchanges but stores none: "0" would read as empty
-      el("td", { class: "num", text: (s.compacted || s.exchanges === null) ? "—" : String(s.exchanges) }),
-      el("td", { class: "num", text: String(s.tokens) }),
-      el("td", {}, bar),
-      el("td", {}, RO ? null :
-        el("div", { class: "row end" },
+    const av = el("div", { class: "avatar", text: initialsFor(s.file) });
+    av.style.background = avatarColor(sessionKey(s.file));
+    const title = el("div", { class: "stitle", text: niceStamp(s.file) },
+      el("span", { class: "key", text: "‹" + sessionKey(s.file) + "›" }));
+    if (omitted.has(s.id)) title.appendChild(el("span", { class: "badge", text: "over budget" }));
+    if (s.compacted) title.appendChild(el("span", { class: "badge", text: "compacted" }));
+    if (s.legacy) title.appendChild(el("span", { class: "badge", text: "Q&A format" }));
+    if (!s.editable && !s.compacted) title.appendChild(el("span", { class: "badge warn", text: "read-only" }));
+    // a compacted session summarises N exchanges but stores none: "0" would read as empty
+    const meta = (s.compacted || s.exchanges === null)
+      ? `~${s.tokens} tokens` : `${s.exchanges} exch. · ~${s.tokens} tokens`;
+    const row = el("div", { class: "srow" },
+      av,
+      el("div", { class: "smain" },
+        title,
+        el("div", { class: "spreview", text: meta + (s.preview ? " — " + s.preview : "") })),
+      RO ? null :
+        el("div", { class: "sacts" },
           el("button", { text: "move…",
             onclick: (e) => { e.stopPropagation(); moveSession(s, e.currentTarget); } }),
           el("button", { class: "danger", text: "delete",
-            onclick: (e) => { e.stopPropagation(); deleteSession(s); } }))));
-    tr.addEventListener("click", () => openSession(c.slug, s.file));
-    tbody.appendChild(tr);
+            onclick: (e) => { e.stopPropagation(); deleteSession(s); } })));
+    row.addEventListener("click", () => openSession(c.slug, s.file));
+    list.appendChild(row);
   });
 }
 
@@ -570,6 +702,8 @@ function exchangeCard(data, ex) {
   card.appendChild(user);
   const agent = el("div", { class: "turn agent" },
     el("span", { class: "rolechip agent", text: "Agent" }));
+  // one chip per model, for the rare turn a model switch straddles
+  for (const m of String(ex.model || "").split(", ")) if (m) agent.appendChild(modelChip(m));
   if (ex.agent) agent.appendChild(md(ex.agent));
   else agent.appendChild(el("p", { class: "empty", text: "(no textual reply captured)" }));
   card.appendChild(agent);

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -12,9 +13,34 @@ from pathlib import Path
 
 import pytest
 
+import memoryhub
 from memoryhub.purify import encode_project_dir
 
 TIMEOUT = 30
+
+UI_PAGE = Path(memoryhub.__file__).parent / "ui" / "index.html"
+UI_HARNESS = Path(__file__).parent / "uijs.mjs"
+HAS_NODE = shutil.which("node") is not None
+needs_node = pytest.mark.skipif(
+    not HAS_NODE, reason="needs node to run the page's own javascript"
+)
+
+
+def run_ui_js(**calls: list) -> dict[str, list]:
+    """Call the shipped page's own functions, e.g. run_ui_js(modelLabel=[...]).
+
+    The page is the only implementation of this logic, so the tests drive it
+    directly rather than a Python restatement of it that could drift.
+    """
+    proc = subprocess.run(
+        ["node", str(UI_HARNESS), str(UI_PAGE)],
+        input=json.dumps(calls),
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT,
+    )
+    assert proc.returncode == 0, f"ui harness failed:\n{proc.stderr}"
+    return json.loads(proc.stdout)
 
 
 @pytest.fixture()
@@ -113,12 +139,18 @@ def iso(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def make_records(turns, start="2026-07-10T04:00:00Z", cwd=None):
+def make_records(turns, start="2026-07-10T04:00:00Z", cwd=None, model=None):
     """Fabricate a realistic Claude transcript: alternating user/assistant
-    records with increasing timestamps, one minute apart."""
+    records with increasing timestamps, one minute apart.
+
+    `model` names the model on every assistant record, or a list to vary it per
+    turn. Left off by default: the parity fixture must stay model-free so it
+    pins the same rendering the original script produces.
+    """
     t = datetime.fromisoformat(start.replace("Z", "+00:00"))
+    models = model if isinstance(model, list) else [model] * len(turns)
     recs = []
-    for q, a in turns:
+    for i, (q, a) in enumerate(turns):
         rec = {
             "type": "user",
             "message": {"role": "user", "content": q},
@@ -128,12 +160,12 @@ def make_records(turns, start="2026-07-10T04:00:00Z", cwd=None):
             rec["cwd"] = cwd
         recs.append(rec)
         t += timedelta(minutes=1)
+        message = {"role": "assistant", "content": [{"type": "text", "text": a}]}
+        if models[i]:
+            message["model"] = models[i]
         rec = {
             "type": "assistant",
-            "message": {
-                "role": "assistant",
-                "content": [{"type": "text", "text": a}],
-            },
+            "message": message,
             "timestamp": iso(t),
         }
         if cwd:
@@ -154,7 +186,7 @@ def write_transcript(home: Path, project_root: Path, sid: str, records) -> Path:
     return dump_jsonl(tdir / f"{sid}.jsonl", records)
 
 
-def make_pi_records(turns, start="2026-07-10T04:00:00Z", cwd=None, sid="x"):
+def make_pi_records(turns, start="2026-07-10T04:00:00Z", cwd=None, sid="x", model=None):
     """pi schema: a session header (with cwd) then type:"message" records."""
     t = datetime.fromisoformat(start.replace("Z", "+00:00"))
     recs = []
@@ -177,19 +209,16 @@ def make_pi_records(turns, start="2026-07-10T04:00:00Z", cwd=None, sid="x"):
             }
         )
         t += timedelta(minutes=1)
-        recs.append(
-            {
-                "type": "message",
-                "message": {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "thinking", "thinking": "hmm"},
-                        {"type": "text", "text": a},
-                    ],
-                },
-                "timestamp": iso(t),
-            }
-        )
+        message = {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "hmm"},
+                {"type": "text", "text": a},
+            ],
+        }
+        if model:
+            message["model"] = model  # pi names it exactly where Claude Code does
+        recs.append({"type": "message", "message": message, "timestamp": iso(t)})
         t += timedelta(minutes=1)
     recs.append({"type": "toolCall", "timestamp": iso(t)})
     return recs
@@ -219,11 +248,14 @@ def write_codex_rollout(
     turns,
     start="2026-07-10T04:00:00Z",
     subagent=False,
+    model=None,
 ) -> Path:
     t = datetime.fromisoformat(start.replace("Z", "+00:00"))
     payload: dict = {"id": sid, "timestamp": iso(t), "cwd": str(project_root)}
     if subagent:
         payload["source"] = {"subagent": {"other": "guardian"}}
+    if model:
+        payload["model"] = model
     recs = [{"timestamp": iso(t), "type": "session_meta", "payload": payload}]
     recs.append(
         {

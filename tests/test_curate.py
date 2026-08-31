@@ -280,6 +280,7 @@ def test_dispatch_map_and_session(mh, ws, hub_project):
     assert data["current"] == "alpha"
     row = data["checkpoints"][0]["sessions"][0]
     assert row["exchanges"] == 2 and row["editable"] is True and row["tokens"] > 0
+    assert row["preview"].startswith("q1")  # first user line, for the list row
 
     status, data = server.dispatch(
         hub, "GET", "/api/session", {"ckpt": "alpha", "file": row["file"]}, {}, False

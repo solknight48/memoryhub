@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import checkpoint as ck
@@ -31,7 +31,7 @@ PREAMBLE_RE = re.compile(
     r"(?:\*\*Q\*\* = user, \*\*A\*\* = assistant\. )?"
     r"\d+ exchanges?\. "
 )
-HEADING_RE = re.compile(r"^## (User|Agent|Q|A) ?(\d+)\s*$")
+HEADING_RE = re.compile(r"^## (User|Agent|Q|A) ?(\d+)(?: — `(?P<model>[^`\n]+)`)?\s*$")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 NO_REPLY = "_(no textual reply captured)_"
 
@@ -54,6 +54,11 @@ class ParsedSession:
     compacted: bool = False
     summary: str = ""  # the compacted payload; empty for dialog sessions
     exchanges: int = 0  # the count a compacted preamble records
+    # One model field per turn, parallel to `turns`; "" where the answer's
+    # heading names no model, which is every session saved before mh recorded
+    # them. Kept beside the turns, never inside, so the tuple shape the whole
+    # codebase passes around is unchanged.
+    models: list[str] = field(default_factory=list)
 
     @property
     def editable(self) -> bool:
@@ -132,9 +137,11 @@ def _render_qa(turns: list[tuple[str, str]], source: str, sid: str | None) -> st
     return "\n".join(lines + blocks).rstrip() + "\n"
 
 
-def _headings(lines: list[str]) -> list[tuple[int, str, int]]:
-    """Every heading-shaped line outside fenced code, as (line, role, index)."""
-    out: list[tuple[int, str, int]] = []
+def _headings(lines: list[str]) -> list[tuple[int, str, int, str]]:
+    """Every heading-shaped line outside fenced code, as (line, role, index,
+    model) — model is "" on user turns and on answers written before mh
+    recorded one."""
+    out: list[tuple[int, str, int, str]] = []
     fence: str | None = None
     for i, line in enumerate(lines):
         f = FENCE_RE.match(line)
@@ -149,13 +156,13 @@ def _headings(lines: list[str]) -> list[tuple[int, str, int]]:
             continue
         m = HEADING_RE.match(line)
         if m:
-            out.append((i, m.group(1), int(m.group(2))))
+            out.append((i, m.group(1), int(m.group(2)), m.group("model") or ""))
     return out
 
 
 def _structural(
-    heads: list[tuple[int, str, int]], legacy: bool
-) -> list[tuple[int, str, int]]:
+    heads: list[tuple[int, str, int, str]], legacy: bool
+) -> list[tuple[int, str, int, str]]:
     """Filter to headings that are genuine turn boundaries.
 
     A heading counts only when it is the NEXT one the renderer would have
@@ -165,10 +172,10 @@ def _structural(
     """
     roles = ("Q", "A") if legacy else ("User", "Agent")
     out = []
-    for line, role, idx in heads:
+    for line, role, idx, model in heads:
         # the k-th genuine heading is always roles[k % 2], numbered k // 2 + 1
         if (role, idx) == (roles[len(out) % 2], len(out) // 2 + 1):
-            out.append((line, role, idx))
+            out.append((line, role, idx, model))
     return out
 
 
@@ -212,8 +219,9 @@ def parse(text: str) -> ParsedSession | None:
     structural = _structural(heads, legacy)
 
     turns: list[tuple[str, str]] = []
+    models: list[str] = []
     pending: str | None = None
-    for j, (line, role, _idx) in enumerate(structural):
+    for j, (line, role, _idx, model) in enumerate(structural):
         end = structural[j + 1][0] if j + 1 < len(structural) else len(lines)
         body = "\n".join(lines[line + 1 : end]).strip()
         answer = role in ("Agent", "A")
@@ -223,6 +231,7 @@ def parse(text: str) -> ParsedSession | None:
             if pending is None:  # malformed; round-trip will reject the file
                 continue
             turns.append((pending, "" if body == NO_REPLY else body))
+            models.append(model)
             pending = None
         else:
             pending = body
@@ -233,6 +242,7 @@ def parse(text: str) -> ParsedSession | None:
         turns=turns,
         legacy=legacy,
         round_trip=False,
+        models=models,
     )
     parsed.round_trip = _render_as_parsed(parsed) == text
     return parsed
@@ -245,8 +255,11 @@ def _render_as_parsed(parsed: ParsedSession) -> str:
             parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
         )
     if parsed.legacy:
+        # The Q&A renderer never wrote a model, so a legacy file carrying one
+        # fails to reproduce and stays read-only rather than being rewritten
+        # into a shape it was not saved in.
         return _render_qa(parsed.turns, parsed.source, parsed.session_id)
-    return purify.render(parsed.turns, parsed.source, parsed.session_id)
+    return purify.render(parsed.turns, parsed.source, parsed.session_id, parsed.models)
 
 
 def render(parsed: ParsedSession) -> str:
@@ -257,7 +270,7 @@ def render(parsed: ParsedSession) -> str:
         return render_compacted(
             parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
         )
-    return purify.render(parsed.turns, parsed.source, parsed.session_id)
+    return purify.render(parsed.turns, parsed.source, parsed.session_id, parsed.models)
 
 
 # --- locating ----------------------------------------------------------------
@@ -304,6 +317,8 @@ def delete_exchange(hub: Path, ckpt_ref: str, file_ref: str, index: int) -> dict
             "that is the session's only exchange; delete the session instead"
         )
     parsed.turns.pop(index - 1)
+    if index <= len(parsed.models):
+        parsed.models.pop(index - 1)  # or every later answer inherits the wrong one
     _write(path, parsed)
     git.auto_commit(hub, f"curate: drop exchange {index} of {path.name} ({c.slug})")
     return {"checkpoint": c.slug, "file": path.name, "exchanges": len(parsed.turns)}

@@ -4,8 +4,11 @@ Vendored and adapted from ~/.claude/skills/purify-context/purify.py so the
 installed tool is self-contained. Extraction semantics are identical (a parity
 test pins this); mh-specific differences: turns are returned in-memory instead
 of written to a file, project-wide transcript discovery lives in agents.py
-(all agents, never another project's sessions), and render() labels turns
-User/Agent where the original emits Q/A.
+(all agents, never another project's sessions), render() labels turns
+User/Agent where the original emits Q/A, and each answer carries the model
+that produced it. Models ride alongside the turns rather than inside them, so
+a transcript that names no model renders exactly what the original does — the
+parity test pins that, and so covers the real save path.
 """
 
 from __future__ import annotations
@@ -38,6 +41,27 @@ WRAPPER_PREFIXES = (
 )
 INTERRUPT_MARKERS = ("[Request interrupted by user", "[Request cancelled")
 SYSTEM_REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.DOTALL)
+
+# What a model id may look like. Deliberately narrow: it has to survive a
+# round-trip through a `## Agent N — `id`` heading, and it screens out Claude
+# Code's "<synthetic>" placeholder for replies it generated itself.
+MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/+-]*$")
+
+
+def model_of(message: object) -> str:
+    """The model id on an assistant record, or "" when there isn't a real one.
+    Claude Code and pi both put it at message.model."""
+    model = (message or {}).get("model") if isinstance(message, dict) else None
+    return model if isinstance(model, str) and MODEL_RE.match(model) else ""
+
+
+def note_model(seen: list[str], message: object) -> None:
+    """Credit a record's model to the turn being built, first use first. Only
+    called for records that contributed visible text, so the label never claims
+    a model whose output was filtered out of the dialog."""
+    model = model_of(message)
+    if model and model not in seen:
+        seen.append(model)
 
 
 def encode_project_dir(root: Path) -> str:
@@ -109,20 +133,26 @@ def assistant_text(rec: dict) -> str:
     return "\n".join(p for p in parts if p).strip()
 
 
-def build_turns(path: Path) -> tuple[list[tuple[str, str]], str | None]:
+def build_turns(path: Path) -> tuple[list[tuple[str, str]], str | None, list[str]]:
     """Walk the transcript in order, pairing each user turn with the assistant
     text that follows it. Consecutive unanswered user messages merge into one Q.
-    Also returns the last record timestamp seen (the session's end time)."""
+    Also returns the last record timestamp seen (the session's end time), and
+    one model field per turn — the models that actually contributed text to
+    that answer, so a mid-session model switch is visible per exchange."""
     turns: list[tuple[str, str]] = []
+    models: list[str] = []
     q_parts: list[str] = []
     a_parts: list[str] = []
+    m_parts: list[str] = []
     last_ts: str | None = None
 
     def flush() -> None:
         if q_parts:
             turns.append(("\n\n".join(q_parts), "\n\n".join(a_parts)))
+            models.append(", ".join(m_parts))
         q_parts.clear()
         a_parts.clear()
+        m_parts.clear()
 
     with open(path, encoding="utf-8") as fh:
         for line in fh:
@@ -148,17 +178,28 @@ def build_turns(path: Path) -> tuple[list[tuple[str, str]], str | None]:
                 txt = assistant_text(rec)
                 if txt and q_parts:  # ignore assistant text before any question
                     a_parts.append(txt)
+                    note_model(m_parts, rec.get("message"))
     flush()
-    return turns, last_ts
+    return turns, last_ts, models
 
 
-def drop_trailing_unanswered(turns: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def drop_trailing_unanswered(
+    turns: list[tuple[str, str]], models: list[str] | None = None
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Drop a trailing question with no answer, keeping models in step. One
+    function rather than two so the turn list and its labels cannot drift."""
+    models = list(models or [])
     if turns and not turns[-1][1].strip():
-        return turns[:-1]
-    return turns
+        return turns[:-1], models[:-1]
+    return turns, models
 
 
-def render(turns: list[tuple[str, str]], source: str, session_id: str | None) -> str:
+def render(
+    turns: list[tuple[str, str]],
+    source: str,
+    session_id: str | None,
+    models: list[str] | None = None,
+) -> str:
     n = len(turns)
     src = os.path.basename(source)
     prov = f"`{src}`" + (f" (session `{session_id}`)" if session_id else "")
@@ -173,8 +214,9 @@ def render(turns: list[tuple[str, str]], source: str, session_id: str | None) ->
     blocks = []
     for i, (user, agent) in enumerate(turns, 1):
         reply = agent if agent else "_(no textual reply captured)_"
+        model = models[i - 1] if models and i <= len(models) else ""
         blocks.append(f"## User {i}\n\n{user}\n")
-        blocks.append(f"## Agent {i}\n\n{reply}\n")
+        blocks.append(f"## Agent {i}{f' — `{model}`' if model else ''}\n\n{reply}\n")
         blocks.append("---\n")
     if blocks:
         blocks.pop()  # no trailing separator

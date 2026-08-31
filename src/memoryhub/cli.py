@@ -150,10 +150,10 @@ def checkpoint(
 
 
 def _resolve_session(hub: Path, session_id, transcript):
-    """(source, session id, identity key, turns, last timestamp) for the session
-    being saved. Shared by the purified and compacted paths so both land under
-    the same identity — a compacted save replaces a purified one, and vice
-    versa, instead of duplicating the session."""
+    """(source, session id, identity key, turns, last timestamp, per-turn
+    models) for the session being saved. Shared by the purified and compacted
+    paths so both land under the same identity — a compacted save replaces a
+    purified one, and vice versa, instead of duplicating the session."""
     root = hubmod.project_root_of(hub)
     sid_opt = session_id or os.environ.get("CLAUDE_CODE_SESSION_ID")
     if transcript:
@@ -172,8 +172,10 @@ def _resolve_session(hub: Path, session_id, transcript):
         src = max(candidates, key=lambda d: d.path.stat().st_mtime).path
         agent_name = agents_mod.detect_agent(src)
     sid, key = agents_mod.identify(agent_name, src)
-    turns, last_ts = agents_mod.extract(agents_mod.Discovered(agent_name, src, sid, key))
-    return src, sid, key, turns, last_ts
+    turns, last_ts, models = agents_mod.extract(
+        agents_mod.Discovered(agent_name, src, sid, key)
+    )
+    return src, sid, key, turns, last_ts, models
 
 
 @app.command()
@@ -233,10 +235,12 @@ def save(
         summary = file.read_text(encoding="utf-8").strip()
         if not summary:
             raise MhError(f"{file} is empty — nothing to compact")
-        src, sid, key, turns, last_ts = _resolve_session(hub, session_id, transcript)
+        src, sid, key, turns, last_ts, models = _resolve_session(
+            hub, session_id, transcript
+        )
         # count what a purified save of this session would hold, so the two
         # representations never disagree about how many exchanges there were
-        turns = purify.drop_trailing_unanswered(turns)
+        turns, _ = purify.drop_trailing_unanswered(turns, models)
         body = curate.render_compacted(summary, str(src), sid, len(turns))
         stamp = purify.stamp_for(last_ts, src)
     elif file:
@@ -250,11 +254,13 @@ def save(
         )
         key = ck.slugify(file.stem)[:40]
     else:
-        src, sid, key, turns, last_ts = _resolve_session(hub, session_id, transcript)
-        turns = purify.drop_trailing_unanswered(turns)
+        src, sid, key, turns, last_ts, models = _resolve_session(
+            hub, session_id, transcript
+        )
+        turns, models = purify.drop_trailing_unanswered(turns, models)
         if not turns:
             raise MhError(f"no dialog found in {src.name}")
-        body = purify.render(turns, str(src), sid)
+        body = purify.render(turns, str(src), sid, models)
         stamp = purify.stamp_for(last_ts, src)
 
     fname = ck.save_session(hub, target, body, key, stamp)
@@ -310,12 +316,12 @@ def import_(
     items = []
     skipped_empty = 0
     for d in fresh:
-        turns, last_ts = agents_mod.extract(d)
+        turns, last_ts, models = agents_mod.extract(d)
         if not turns:
             skipped_empty += 1
             continue
         stamp = purify.stamp_for(last_ts, d.path)
-        body = purify.render(turns, str(d.path), d.sid)
+        body = purify.render(turns, str(d.path), d.sid, models)
         items.append((d, stamp, body, len(turns)))
     items.sort(key=lambda item: item[1])  # chronological
 
@@ -1045,10 +1051,10 @@ def hook_save():
         )
         sid_raw = payload.get("session_id")
         sid_hint = sid_raw if isinstance(sid_raw, str) and sid_raw else None
-        src, sid, key, turns, last_ts = _resolve_session(
+        src, sid, key, turns, last_ts, models = _resolve_session(
             hub, None if transcript else sid_hint, transcript
         )
-        turns = purify.drop_trailing_unanswered(turns)
+        turns, models = purify.drop_trailing_unanswered(turns, models)
         if not turns:
             print(f"mh hook save: no dialog in {src.name} — skipped", file=sys.stderr)
             return
@@ -1065,7 +1071,7 @@ def hook_save():
                 )
                 return
             target = existing_ck  # the session was routed there on purpose
-        body = purify.render(turns, str(src), sid)
+        body = purify.render(turns, str(src), sid, models)
         stamp = purify.stamp_for(last_ts, src)
         fname = ck.save_session(hub, target, body, key, stamp)
         print(f"mh: saved {fname} -> {target.slug}")
