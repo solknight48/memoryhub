@@ -230,10 +230,10 @@ def identify(agent: str, path: Path) -> tuple[str, str]:
 # --- extraction --------------------------------------------------------------
 
 
-def extract(d: Discovered) -> tuple[list[tuple[str, str]], str | None]:
-    """(turns, last_timestamp) for any supported agent. The trailing unanswered
-    turn is KEPT — archival imports preserve the full record (unlike live
-    `mh save`, which drops the request that triggered it)."""
+def extract(d: Discovered) -> tuple[list[tuple[str, str]], str | None, list[str]]:
+    """(turns, last_timestamp, models) for any supported agent. The trailing
+    unanswered turn is KEPT — archival imports preserve the full record (unlike
+    live `mh save`, which drops the request that triggered it)."""
     if d.agent == "claude":
         return purify.build_turns(d.path)
     if d.agent == "pi":
@@ -243,20 +243,25 @@ def extract(d: Discovered) -> tuple[list[tuple[str, str]], str | None]:
     raise MhError(f"no extractor for agent '{d.agent}'")
 
 
-def _build_turns_pi(path: Path) -> tuple[list[tuple[str, str]], str | None]:
+def _build_turns_pi(path: Path) -> tuple[list[tuple[str, str]], str | None, list[str]]:
     """pi schema: type:"message" records with message.{role,content}; content is
     a string or blocks of which only type:"text" survive. Mirrors the
-    memory-map skill's adapter, plus timestamp capture."""
+    memory-map skill's adapter, plus timestamp and model capture. pi names the
+    model at message.model, the same place Claude Code does."""
     turns: list[tuple[str, str]] = []
+    models: list[str] = []
     q_parts: list[str] = []
     a_parts: list[str] = []
+    m_parts: list[str] = []
     last_ts: str | None = None
 
     def flush() -> None:
         if q_parts:
             turns.append(("\n\n".join(q_parts), "\n\n".join(a_parts)))
+            models.append(", ".join(m_parts))
         q_parts.clear()
         a_parts.clear()
+        m_parts.clear()
 
     for rec in _jsonl(path):
         ts = rec.get("timestamp")
@@ -297,24 +302,39 @@ def _build_turns_pi(path: Path) -> tuple[list[tuple[str, str]], str | None]:
             q_parts.append(text)
         elif role == "assistant" and q_parts:
             a_parts.append(text)
+            purify.note_model(m_parts, msg)
     flush()
-    return turns, last_ts
+    return turns, last_ts, models
 
 
-def _build_turns_codex(path: Path) -> tuple[list[tuple[str, str]], str | None]:
+def _build_turns_codex(
+    path: Path,
+) -> tuple[list[tuple[str, str]], str | None, list[str]]:
     """Codex rollouts: type:"response_item" with payload.type:"message"; user
     text in input_text blocks (harness wrappers dropped), assistant text in
-    output_text blocks."""
+    output_text blocks.
+
+    Codex names the model per response_item where it says so, otherwise the
+    session_meta model stands in for the whole session. Unlike claude and pi
+    this is unverified against a real rollout — no codex transcript exists on
+    the machine mh was built on — so it degrades to no label rather than
+    guessing a field name.
+    """
     turns: list[tuple[str, str]] = []
+    models: list[str] = []
     q_parts: list[str] = []
     a_parts: list[str] = []
+    m_parts: list[str] = []
     last_ts: str | None = None
+    session_model = purify.model_of((_codex_meta(path) or {}).get("payload"))
 
     def flush() -> None:
         if q_parts:
             turns.append(("\n\n".join(q_parts), "\n\n".join(a_parts)))
+            models.append(", ".join(m_parts) or session_model)
         q_parts.clear()
         a_parts.clear()
+        m_parts.clear()
 
     for rec in _jsonl(path):
         ts = rec.get("timestamp")
@@ -355,5 +375,6 @@ def _build_turns_codex(path: Path) -> tuple[list[tuple[str, str]], str | None]:
             text = "\n".join(t for t in texts if t).strip()
             if text and q_parts:
                 a_parts.append(text)
+                purify.note_model(m_parts, payload)
     flush()
-    return turns, last_ts
+    return turns, last_ts, models

@@ -196,9 +196,15 @@ def test_parity_with_original_script(ws, tmp_path):
         cwd=str(tmp_path),
         env=ws["env"],
     )
-    turns, _ = vendored.build_turns(tr)
-    turns = vendored.drop_trailing_unanswered(turns)
-    assert vendored.render(turns, str(tr), None) == as_mh_format(out.read_text())
+    turns, _, models = vendored.build_turns(tr)
+    turns, models = vendored.drop_trailing_unanswered(turns, models)
+    # The fixture names no model, so models is all-empty and render() takes the
+    # very path a real save takes — parity still covers the shipping renderer,
+    # not a stripped-down variant of it.
+    assert models == ["", ""]
+    assert vendored.render(turns, str(tr), None, models) == as_mh_format(
+        out.read_text()
+    )
 
 
 def test_trailing_unanswered_dropped(mh, ws, hub_project):

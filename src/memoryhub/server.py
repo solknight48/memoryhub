@@ -33,6 +33,15 @@ def _session_rows(c: ck.Checkpoint) -> list[dict]:
     for p in c.sessions:
         text = p.read_text(encoding="utf-8", errors="replace")
         parsed = curate.parse(text)
+        if parsed and parsed.turns:
+            first = parsed.turns[0][0]
+        elif parsed and parsed.compacted:
+            first = parsed.summary
+        else:
+            first = ""
+        preview = " ".join(first.split())
+        if len(preview) > 160:
+            preview = preview[:160] + "…"
         rows.append(
             {
                 "file": p.name,
@@ -42,6 +51,7 @@ def _session_rows(c: ck.Checkpoint) -> list[dict]:
                 "editable": bool(parsed and parsed.editable),
                 "legacy": bool(parsed and parsed.legacy),
                 "compacted": bool(parsed and parsed.compacted),
+                "preview": preview,
             }
         )
     return rows
@@ -94,7 +104,14 @@ def _session(hub: Path, ckpt: str, file: str) -> dict:
         "source": parsed.source if parsed else None,
         "session_id": parsed.session_id if parsed else None,
         "exchanges": [
-            {"index": i, "user": u, "agent": a}
+            {
+                "index": i,
+                "user": u,
+                "agent": a,
+                # "" for anything saved before mh recorded models; the UI shows
+                # no badge rather than inventing one
+                "model": parsed.models[i - 1] if i <= len(parsed.models) else "",
+            }
             for i, (u, a) in enumerate(parsed.turns if parsed else [], 1)
         ],
     }
