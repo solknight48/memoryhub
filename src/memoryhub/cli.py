@@ -933,6 +933,20 @@ def hubs(
         print(p + ("" if ok else "  (missing)"))
 
 
+def _budget_value(budget: str) -> int | None:
+    if budget.strip().lower() == "none":
+        return None
+    try:
+        value = int(budget)
+    except ValueError:
+        raise MhError(
+            f"--budget must be a non-negative integer or 'none', got '{budget}'"
+        ) from None
+    if value < 0:
+        raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
+    return value
+
+
 @app.command()
 @guard
 def ui(
@@ -961,6 +975,7 @@ def ui(
         "--session",
         help="Session the live panel follows (id or key). Default: $CLAUDE_CODE_SESSION_ID.",
     ),
+    adopt_socket: int | None = typer.Option(None, "--adopt-socket", hidden=True),
 ):
     """Open the checkpoint map: visualize the hub and curate it in a browser."""
     import webbrowser
@@ -968,6 +983,10 @@ def ui(
     from . import server
 
     hub = _hub()
+    if adopt_socket is not None:
+        # the spawned half of --detach: serve on the socket the parent bound
+        server.adopt(hub, adopt_socket, read_only, _budget_value(budget))
+        return
     if stop:
         rec = server.stop(hub)
         print(f"stopped mh ui (pid {rec['pid']})" if rec else "no background mh ui is running")
@@ -983,18 +1002,7 @@ def ui(
         if browser:
             webbrowser.open(url)
         return
-    budget_value: int | None
-    if budget.strip().lower() == "none":
-        budget_value = None
-    else:
-        try:
-            budget_value = int(budget)
-        except ValueError:
-            raise MhError(
-                f"--budget must be a non-negative integer or 'none', got '{budget}'"
-            ) from None
-        if budget_value < 0:
-            raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
+    budget_value = _budget_value(budget)
     if host not in server.ALLOWED_HOSTS:
         # The Host check rejects anything that is not a loopback name, so a
         # remote browser gets 403s even when the bind is wide open — the

@@ -17,9 +17,11 @@ import json
 import os
 import secrets
 import signal
+import socket
+import subprocess
+import sys
 import threading
 import time
-import traceback
 import webbrowser
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -560,34 +562,73 @@ def page_url(base: str, sid: str | None) -> str:
     return base + (f"&sid={quote(sid, safe='')}" if sid else "")
 
 
-def _detach(hub: Path, httpd: ThreadingHTTPServer, url: str, open_browser: bool) -> int:
-    """Fork the server into the background: the parent gets the child's pid
-    back, the child serves until stopped and never returns from here."""
-    if not hasattr(os, "fork"):
+def _spawn(
+    hub: Path,
+    httpd: ThreadingHTTPServer,
+    token: str,
+    host: str,
+    read_only: bool,
+    budget: int | None,
+) -> int:
+    """Start a fresh process that adopts the already-bound socket and serves
+    until stopped. Spawn, never fork-without-exec — macOS wedges forked
+    children that touch its frameworks, and an exec'd child starts clean.
+    The token rides in the environment, not argv: ps shows argv to everyone."""
+    if os.name != "posix":
         raise MhError("--detach needs a POSIX system; run `mh ui` in a terminal of its own")
     git.exclude(hub, "/" + UI_RECORD)
     git.exclude(hub, "/" + UI_LOG)
-    pid = os.fork()
-    if pid:
-        httpd.socket.close()  # the parent's copy only — the child keeps listening
-        return pid
+    fd = httpd.fileno()
+    os.set_inheritable(fd, True)
+    argv = [
+        sys.executable,
+        "-m",
+        "memoryhub",
+        "ui",
+        "--adopt-socket",
+        str(fd),
+        "--host",
+        host,
+        "--budget",
+        str(budget) if budget is not None else "none",
+    ]
+    if read_only:
+        argv.append("--read-only")
+    log = os.open(str(hub / UI_LOG), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
     try:
-        os.setsid()  # its own session: outlives the terminal and the agent
-        null = os.open(os.devnull, os.O_RDONLY)
-        log = os.open(str(hub / UI_LOG), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-        os.dup2(null, 0)
-        os.dup2(log, 1)
-        os.dup2(log, 2)
-        signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)
-        print(f"mh ui: {url}  (pid {os.getpid()}, started {datetime.now():%H:%M:%S})", flush=True)
-        if open_browser:
-            threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
-        httpd.serve_forever()
-    except BaseException:
-        traceback.print_exc()
-        os._exit(1)
-    os._exit(0)
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            start_new_session=True,  # outlives the terminal and the agent
+            close_fds=True,
+            pass_fds=(fd,),
+            env={**os.environ, "MH_UI_TOKEN": token},
+        )
+    finally:
+        os.close(log)
+    return proc.pid
+
+
+def adopt(hub: Path, fd: int, read_only: bool, budget: int | None) -> None:
+    """The spawned half of --detach: serve on the socket the parent bound,
+    with the token it minted, until SIGTERM (`mh ui --stop`)."""
+    token = os.environ.pop("MH_UI_TOKEN", "")
+    httpd = ThreadingHTTPServer(
+        ("127.0.0.1", 0), make_handler(hub, token, read_only, budget), bind_and_activate=False
+    )
+    httpd.socket.close()  # the placeholder — the real one is inherited
+    httpd.socket = socket.socket(fileno=fd)
+    httpd.server_address = httpd.socket.getsockname()
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    print(
+        f"mh ui: serving on port {httpd.server_address[1]} "
+        f"(pid {os.getpid()}, started {datetime.now():%H:%M:%S})",
+        flush=True,
+    )
+    httpd.serve_forever()
 
 
 def listen(host: str, port: int | None, handler) -> tuple[ThreadingHTTPServer, int | None]:
@@ -621,7 +662,8 @@ def serve(
     if taken:
         print(f"port {taken} is taken (another map?) — using {httpd.server_address[1]}", flush=True)
     if detach:
-        pid = _detach(hub, httpd, url, open_browser)
+        pid = _spawn(hub, httpd, token, host, read_only, budget)
+        httpd.socket.close()  # the parent's copy; the spawned server keeps its own
         record_path(hub).write_text(
             json.dumps(
                 {
@@ -636,6 +678,8 @@ def serve(
         )
         print(f"mh ui: {url}", flush=True)
         print(f"running in the background (pid {pid}) — mh ui --stop ends it", flush=True)
+        if open_browser:
+            webbrowser.open(url)
         return
     # flush: serve_forever() blocks, so a piped stdout would otherwise hold the
     # URL in the buffer and show the user nothing at all.
