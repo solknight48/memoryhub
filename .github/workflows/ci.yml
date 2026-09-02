@@ -29,4 +29,8 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1  # no floating major tag on this action
         with:
           python-version: ${{ matrix.python }}
+      # the relay tests drive a real tmux server (Linux-only feature; the
+      # tests skip wherever the binary is missing, e.g. the macOS image)
+      - if: runner.os == 'Linux'
+        run: sudo apt-get install -y tmux
       - run: uv run --locked pytest -q

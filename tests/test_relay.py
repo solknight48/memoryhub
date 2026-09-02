@@ -74,6 +74,7 @@ def live_session(ws, project):
 # --- no terminal, no pretending ----------------------------------------------
 
 
+@needs_tmux
 def test_without_tmux_the_panel_says_so_instead_of_failing(mh, ws, hub_project, monkeypatch):
     monkeypatch.setenv("TMUX_TMPDIR", str(ws["root"] / "empty"))
     (ws["root"] / "empty").mkdir()
@@ -171,6 +172,7 @@ def test_an_agent_restarted_in_the_recorded_pane_is_accepted(mh, ws, hub_project
     assert where["pid"] == relay.panes()[pane]["pid"]  # the agent now in the pane
 
 
+@needs_tmux
 def test_a_record_whose_tmux_has_exited_says_how_to_come_back(mh, ws, hub_project, monkeypatch):
     """A pane started as `tmux new -s mh claude` dies with claude, and the
     whole server with it. The reason names that mistake rather than claiming
