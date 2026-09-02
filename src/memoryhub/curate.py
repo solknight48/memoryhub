@@ -383,6 +383,20 @@ def _relink(hub: Path, rename: tuple[str, str] | None = None, drop: str | None =
         old, new = rename
         links = [(new if a == old else a, new if b == old else b) for a, b in links]
     ck.write_links(hub, links)
+    # an explicit stage placement follows its checkpoint, and leaves with it;
+    # a renamed checkpoint keeps its column, since the new name may say otherwise
+    stages = ck.read_stages(hub)
+    if drop:
+        stages.pop(drop, None)
+    if rename and rename[0] in stages:
+        stages[rename[1]] = stages.pop(rename[0])
+    elif rename:
+        old, new = rename
+        column = ck.stage_of(hub, old, stages)
+        if ck.stage_of(hub, new, stages) != column:
+            stages[new] = column
+    if stages or ck.stages_path(hub).exists():
+        ck.write_stages(hub, stages)
 
 
 def rename_checkpoint(hub: Path, ref: str, name: str) -> dict:

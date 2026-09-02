@@ -30,6 +30,10 @@ surrounding project, managed by the `mh` CLI.
 - `checkpoints/<created>_<name>/` — a checkpoint: a container of purified sessions
   (`<timestamp>_<session-id>.md`), independent of other checkpoints unless linked.
 - `links.toml` — undirected links between checkpoints; linked checkpoints load together.
+- `template.toml` — optional stage template: the names `mh checkpoint` (no name) creates
+  in order. Edit the list to give the project its own sequence.
+- `stages.toml` — checkpoints placed at a stage their name does not say (`--at`); by
+  name, design-2 already belongs with design.
 - `current` — untracked local pointer to the current checkpoint.
 
 The hub is a normal git repo: every mh mutation is a commit. Anything mh does not

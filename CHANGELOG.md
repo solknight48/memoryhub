@@ -7,6 +7,29 @@ All notable changes to `mh` are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Project memory in the map**: the notes Claude Code keeps about a project
+  (`~/.claude/projects/<project>/memory/`) are shown read-only under the
+  timeline — one card per note with its type, markdown body, `[[name]]` links
+  to related notes, and the originating session opened on its own page when
+  its transcript is still on this machine (`GET /api/memory`). mh never
+  writes the folder.
+- **Trace a saved session to its origin**: `mh trace <ckpt>/<session>` resolves
+  the session id recorded in the purified file to the original transcript on
+  this machine (nothing machine-specific is stored — the id is the link). The
+  map's session panel gains an **open original ↗** link that opens the full
+  unfiltered transcript on a page of its own (`?view=<id>`, pinned for good).
+- **Several checkpoints at one stage**: `design`, `design-2`, `design-3`
+  stack under one node of the timeline (a trailing number is another take at
+  the stage; `mh checkpoint --at design` numbers the next one; `--at` with a
+  name places a checkpoint at a stage its name does not say, kept in
+  `stages.toml`). Independent as ever; the map's panel gains "+ another here".
+- **Stage templates** — default checkpoint names for a kind of project:
+  `mh template --list` shows ten (quant, frontend, backend, sdlc, mobile,
+  devops, data, ml, sprint, hotfix), `mh template <name>` or
+  `mh init --template <name>` records one in the hub (`template.toml`, a copy
+  of the stages you can edit), `mh checkpoint` with no name creates the next
+  stage, `mh status` reports the progress, and the map draws the stages ahead
+  as dashed nodes (click to create) with a template picker in the header.
 - **Live session panel** in `mh ui`: the transcript being written right now,
   re-read as it grows, shown unfiltered (thinking, text, tool calls, parallel
   batches, subagent output) while saves keep storing purified dialog. Curation
@@ -35,9 +58,18 @@ All notable changes to `mh` are recorded here. The format follows
   bytes sniff as PNG/JPEG/GIF/WebP). Nothing is copied into the hub.
 - The live panel no longer clips the agent's reply text at 4,000 characters;
   only tool inputs (4k) and thinking (12k) are capped.
+- The composer projects the CLI's input: a message starting with `/` offers
+  the session's own skills and commands (read from disk — user and project
+  skills, custom commands, installed plugins; pi's skills) plus the built-ins
+  worth sending from a browser, and `/model` offers the CLI's aliases and the
+  models the session has used. The composed text is pasted into the session
+  and run by the CLI itself (`GET /api/live/commands`).
 - `CONTRIBUTING.md`, `.editorconfig`, a `ruff` configuration and a CI lint job.
 
 ### Changed
+- The default load budget is 20000 tokens (was 6000): about a tenth of a 200k
+  context, three or four typical sessions instead of one. `mh hook install
+  --budget N` sizes the pack the SessionStart hook injects.
 - **One save policy** (`save.py`) shared by `mh save`, `mh hook save` and the
   panel: a session lives in exactly one checkpoint — a save with no target
   updates it where it already is, `mh save --to <ckpt>` moves it, and only an
@@ -51,6 +83,9 @@ All notable changes to `mh` are recorded here. The format follows
 - The test suite runs in parallel by default (`pytest-xdist`).
 
 ### Fixed
+- Typing back: a pane that another session of the project has since started in
+  (its own record, alive) is no longer handed to the older session as
+  "restarted in the same pane" — the keys would have landed in the new one.
 - Running the test suite from inside tmux killed the developer's tmux server
   (the relay tests' private server honoured the inherited `$TMUX` socket).
   Tests no longer see `TMUX`/`TMUX_PANE` at all.

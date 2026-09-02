@@ -31,8 +31,11 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__, curate, git, load, purify
 from . import checkpoint as ck
+from . import commands as commandsmod
 from . import live as livemod
+from . import memory as memorymod
 from . import relay as relaymod
+from . import templates as tmpl
 from .hub import MhError, project_root_of, read_current
 
 MAX_BODY = 4 * 1024 * 1024
@@ -94,18 +97,25 @@ def _map(hub: Path, budget: int | None) -> dict:
         # Say why the next load would be empty; a greyed-out map with no
         # explanation is the same dead end the git errors below avoid.
         loaded, included, omitted, error = [], [], [], e.message
+    placed = ck.read_stages(hub)
     return {
         "checkpoints": [
             {
                 "slug": c.slug,
+                "stage": ck.stage_of(hub, c.slug, placed),
                 "created": c.created,
                 "sessions": _session_rows(c),
             }
             for c in cps
         ],
+        # the timeline's columns: checkpoints at one stage stack under one node
+        "stages": ck.stages(hub, cps),
         "links": [list(e) for e in ck.read_links(hub)],
         "current": read_current(hub),
         "budget": budget,
+        # the stage template, with the stages still ahead: the map draws them
+        "template": tmpl.progress(hub),
+        "templates": tmpl.catalogue(),
         "load": {
             "loaded": loaded,
             "included": included,
@@ -119,6 +129,8 @@ def _session(hub: Path, ckpt: str, file: str) -> dict:
     c, path = curate.resolve_session(hub, ckpt, file)
     text = path.read_text(encoding="utf-8", errors="replace")
     parsed = curate.parse(text)
+    sid = parsed.session_id if parsed else None
+    original = livemod.find(hub, sid) if sid else None
     return {
         "checkpoint": c.slug,
         "file": path.name,
@@ -128,7 +140,10 @@ def _session(hub: Path, ckpt: str, file: str) -> dict:
         "reason": curate.readonly_reason(parsed),
         "raw": text if parsed is None or parsed.compacted else None,
         "source": parsed.source if parsed else None,
-        "session_id": parsed.session_id if parsed else None,
+        "session_id": sid,
+        # the original transcript, when it is still on this machine: the live
+        # panel can open it unfiltered, keyed by this id
+        "original": {"key": original.key, "agent": original.agent} if original else None,
         "exchanges": [
             {
                 "index": i,
@@ -315,6 +330,28 @@ def _live(hub: Path, fp: str, sid: str | None, full: bool = False) -> dict:
     }
 
 
+def _commands(hub: Path, sid: str | None) -> dict:
+    """What the composer may offer at the start of a message: the skills and
+    commands of the agent behind the followed session, read from disk now, so
+    a skill installed a minute ago is already on the list."""
+    ls = livemod.read(hub, sid)
+    if ls is None:
+        raise MhError("no transcript for this project yet (claude, pi, codex)")
+    return commandsmod.commands(ls.agent, project_root_of(hub))
+
+
+def _memory(hub: Path) -> dict:
+    """Claude Code's per-project memory for the page (read-only). Each note that
+    still has its origin transcript on this machine is marked, so the page can
+    open it in the live panel the way a saved session does."""
+    data = memorymod.read(project_root_of(hub))
+    for m in data["memories"]:
+        origin = livemod.find(hub, m["origin"]) if m["origin"] else None
+        m["origin_here"] = origin is not None
+        m["origin_key"] = origin.key if origin else (m["origin"][:8] if m["origin"] else None)
+    return data
+
+
 def _need(body: dict, *keys: str) -> list:
     out = []
     for k in keys:
@@ -343,6 +380,10 @@ def dispatch(
                 query.get("sid") or None,
                 query.get("full") == "1",
             )
+        if path == "/api/memory":
+            return 200, _memory(hub)
+        if path == "/api/live/commands":
+            return 200, _commands(hub, query.get("sid") or None)
         return 404, {"error": f"no route {path}"}
 
     if method != "POST":
@@ -390,9 +431,19 @@ def dispatch(
         (slug,) = _need(body, "slug")
         return 200, curate.delete_checkpoint(hub, slug)
     if path == "/api/checkpoint/create":
-        (name,) = _need(body, "name")
-        c = ck.create(hub, name)
-        return 200, {"slug": c.slug, "created": c.created}
+        # a name, or a stage to add one more take at (named design-2, design-3, …)
+        at = body.get("at") or None
+        name = body.get("name") or (ck.next_at(hub, at) if at else None)
+        if not name:
+            raise MhError("missing 'name'")
+        c = ck.create(hub, name, stage=at)
+        return 200, {"slug": c.slug, "created": c.created, "stage": ck.stage_of(hub, c.slug)}
+    if path == "/api/template":
+        # {"name": "quant"} chooses one; {"name": null} stops using any
+        if body.get("name"):
+            return 200, tmpl.use(hub, str(body["name"]))
+        tmpl.clear(hub)
+        return 200, {"name": None}
     if path == "/api/link":
         a, b = _need(body, "a", "b")
         edge = ck.add_link(hub, a, b)

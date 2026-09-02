@@ -10,7 +10,11 @@ from . import checkpoint as ck
 from . import git
 from .hub import MhError, read_current
 
-DEFAULT_BUDGET = 6000  # one definition; the CLI, the API and the page share it
+# One definition; the CLI, the hook, the API and the page share it. About a
+# tenth of a 200k context: three or four typical sessions of purified dialog,
+# which is a warm start rather than a reminder. The estimate runs ~10% low on
+# English markdown, so this is ~22k real tokens.
+DEFAULT_BUDGET = 20000
 
 # CJK scripts run ~1 token per character where ASCII prose runs ~4 characters
 # per token; a plain len//4 undercounts a Chinese session ~4x and the budget

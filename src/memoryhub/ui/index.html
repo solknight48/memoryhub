@@ -79,6 +79,13 @@ header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, m
 .spacer { flex: 1; }
 main { padding: 8px 24px 28px; max-width: 1100px; margin: 0 auto; }
 .tagline { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 4px 0 18px; }
+/* ?view=<sid>: a page for one transcript, opened from "open original". Only
+   the live panel, pinned to that session for good, full output, every
+   exchange — the map, its controls and the session-switching are not here. */
+body.viewonly main > section:not(#livesec), body.viewonly .tagline,
+body.viewonly #budget, body.viewonly #budget-label, body.viewonly #newckpt, body.viewonly #tmpl,
+body.viewonly #reload, body.viewonly #golive, body.viewonly #live-follow, body.viewonly #live-newest,
+body.viewonly #current { display: none !important; }
 section {
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 20px; padding: 22px 24px; margin-bottom: 22px;
@@ -277,6 +284,58 @@ pre .t { color: var(--c-type); }
 .composer .to { font-size: 12px; color: var(--muted); flex: 1; min-width: 0;
                 overflow-wrap: anywhere; }
 .composer .to.off { color: var(--critical); }
+/* Claude Code's per-project auto-memory, shown read-only beside the map: one
+   card per note, its markdown body, the notes it links to, and the session it
+   came from. mh does not own this folder and never writes it. */
+.memcard { border: 1px solid var(--grid); border-radius: 12px; padding: 12px 14px;
+           margin-bottom: 10px; background: var(--surface-1); scroll-margin-top: 16px; }
+.memcard.flash { animation: memflash 1.2s ease-out; }
+@keyframes memflash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: none; } }
+.memcard > header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+                    margin-bottom: 6px; }
+.memcard .mtitle { font-weight: 650; }
+.memcard .mname { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.mtype { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+         padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.mtype.feedback { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.mtype.reference { background: color-mix(in srgb, #b45309 18%, transparent); color: #b45309; }
+.mtype.user { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+.memcard .md { font-size: 13px; }
+.memcard .mrel { margin-top: 8px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap;
+                 font-size: 12px; color: var(--muted); }
+.memchip { border: 1px solid var(--baseline); border-radius: 999px; padding: 1px 9px;
+           font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer;
+           background: transparent; color: var(--text-secondary); }
+.memchip:hover { border-color: var(--accent); color: var(--accent); }
+.memchip.missing { cursor: default; opacity: 0.6; text-decoration: line-through; }
+.memchip.missing:hover { border-color: var(--baseline); color: var(--text-secondary); }
+.prov { font-size: 12px; color: var(--text-secondary); margin: -4px 0 12px;
+        display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.prov code { font-size: 11.5px; }
+.linklike { border: 0; background: transparent; color: var(--accent); cursor: pointer;
+            padding: 0; font: inherit; text-decoration: underline; }
+.linklike:hover { opacity: 0.8; }
+/* the box's projection of the CLI: a message that starts with "/" brings up
+   the session's own skills and commands (read from disk by mh) and, behind
+   /model, its models. Picking one composes the text here; the CLI runs it as
+   if typed at its prompt. It grows upward from the message box, since the
+   composer sits at the bottom of the window. */
+.palette { border: 1px solid var(--baseline); border-radius: 10px; background: var(--surface-1);
+           margin-bottom: 8px; max-height: 260px; overflow: auto; overscroll-behavior: contain; }
+.palette .phead { font-size: 11px; color: var(--muted); padding: 6px 10px 4px;
+                  position: sticky; top: 0; background: var(--surface-1); }
+.palette .pitem { display: flex; gap: 10px; align-items: baseline; padding: 5px 10px;
+                  cursor: pointer; }
+.palette .pitem.sel, .palette .pitem:hover { background: var(--accent-soft); }
+.palette .pname { font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                  white-space: nowrap; }
+.palette .phint { font: 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                  color: var(--muted); white-space: nowrap; }
+.palette .pdesc { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0;
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette .pkind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+                  color: var(--muted); white-space: nowrap; }
+.palette .pempty { padding: 6px 10px 8px; font-size: 12px; color: var(--muted); }
 .liverow { margin-bottom: 12px; }
 .liverow label { font-size: 12px; }
 #menu .menu-label { font-size: 11px; color: var(--muted); padding: 2px 8px 6px; }
@@ -300,10 +359,11 @@ pre .t { color: var(--c-type); }
   <span class="muted" id="current" style="font-size:12px"></span>
   <span class="spacer"></span>
   <button id="golive" hidden title="Jump to the session running right now">● live session</button>
-  <label class="muted" style="font-size:12px" title="Token budget for the next mh load — the map marks the sessions that fit">budget
+  <label class="muted" id="budget-label" style="font-size:12px" title="Token budget for the next mh load — the map marks the sessions that fit">budget
     <input type="number" id="budget" min="0" step="500"
            style="width:90px;display:inline-block;margin-left:6px">
   </label>
+  <button id="tmpl" title="Stage template: default names for the checkpoints ahead">template ▾</button>
   <button id="newckpt" class="mint">+ checkpoint</button>
   <button id="reload">refresh</button>
 </header>
@@ -317,13 +377,25 @@ pre .t { color: var(--c-type); }
       <span><i class="key" style="background:var(--accent)"></i> in the next <code>mh load</code></span>
       <span><i class="key" style="background:var(--neutral-mark)"></i> not loaded</span>
       <span><i class="key" style="background:transparent;border:2px solid var(--text-primary)"></i> current pointer</span>
+      <span id="legend-ahead" hidden><i class="key" style="background:transparent;border:2px dashed var(--muted)"></i> stage ahead (template)</span>
       <span class="muted">arc = link (loads together) · node size = sessions</span>
     </div>
+  </section>
+
+  <section id="memsec" hidden>
+    <div class="row" style="align-items:baseline">
+      <h2>Project memory</h2>
+      <span class="muted" id="memmeta" style="font-size:12px"></span>
+      <span class="spacer"></span>
+      <button id="memtoggle" title="Show or hide the notes"></button>
+    </div>
+    <div id="memlist"></div>
   </section>
 
   <section id="ckptsec" hidden>
     <h2 id="ckpttitle"></h2>
     <div class="row" style="margin-bottom:12px" id="ckactions">
+      <button id="ck-another" title="One more checkpoint at this stage — design, design-2, design-3…">+ another here</button>
       <button id="ck-rename">rename</button>
       <button id="ck-link">link to…</button>
       <button id="ck-unlink">unlink…</button>
@@ -335,6 +407,7 @@ pre .t { color: var(--c-type); }
 
   <section id="sessec" hidden>
     <h2 id="sestitle"></h2>
+    <div id="prov" class="prov"></div>
     <div id="exchanges"></div>
   </section>
 
@@ -354,9 +427,11 @@ pre .t { color: var(--c-type); }
     <div id="liveex"></div>
 
     <div class="composer" id="composer">
-      <textarea id="say" placeholder="type to this session — it lands in its terminal as if you typed it"></textarea>
+      <div class="palette" id="palette" hidden></div>
+      <textarea id="say" placeholder="type to this session — it lands in its terminal as if you typed it · / for its skills and commands"></textarea>
       <div class="row" style="margin-top:8px">
         <span class="to" id="sayto"></span>
+        <button id="say-slash" title="the session's skills and commands">/ commands</button>
         <button id="say-send" class="primary">send ⌘⏎</button>
       </div>
     </div>
@@ -373,7 +448,7 @@ const TOKEN = PARAMS.get("t") || "";
 const $ = (id) => document.getElementById(id);
 // Server-injected config; the empty-object fallback keeps the page sane if it
 // is ever opened as a plain file.
-const CFG = { budget: 6000, readOnly: false, hub: "", version: "",
+const CFG = { budget: 20000, readOnly: false, hub: "", version: "",
               ...JSON.parse($("mh-config").textContent || "{}") };
 const RO = !!CFG.readOnly;
 let DATA = null, SEL_CK = null;
@@ -801,68 +876,195 @@ function drawMap() {
   }
   const loadedSet = new Set(DATA.load.loaded);
   const inPack = new Set(DATA.load.included.map((id) => id.split("/")[0]));
-  const step = Math.max(120, Math.min(200, 900 / cps.length));
-  const padX = 60, arcRoom = 26 + Math.min(cps.length, 6) * 11;
-  const W = padX * 2 + step * (cps.length - 1);
-  const axisY = arcRoom + 46, H = axisY + 78;
+  const bySlug = new Map(cps.map((c) => [c.slug, c]));
+  // One column per stage; checkpoints at the same stage stack under its node.
+  // The template's stages still ahead follow, dashed.
+  const columns = DATA.stages.map((col) => ({ ...col, ghost: false }));
+  const ahead = DATA.template ? DATA.template.stages.filter((st) => !st.exists) : [];
+  ahead.forEach((st) => columns.push({ stage: st.slug, name: st.name, members: [], ghost: true }));
+  // stacked takes are named beside their node, so a column is at least as
+  // wide as the longest such name
+  const beside = Math.max(0, ...columns.flatMap((col) => col.members.slice(1).map((slug) =>
+    (slug.length + (slug === DATA.current ? 10 : 0)) * 6.6 + 40)));
+  const step = Math.max(120, beside, Math.min(200, 900 / columns.length));
+  const padX = 60, arcRoom = 26 + Math.min(cps.length, 6) * 11, stackGap = 46;
+  const deepest = Math.max(1, ...columns.map((col) => col.members.length));
+  const W = padX * 2 + step * (columns.length - 1);
+  const axisY = arcRoom + 46, H = axisY + 78 + (deepest - 1) * stackGap;
   host.setAttribute("width", Math.max(W, 320));
   host.setAttribute("height", H);
 
   const x = (i) => padX + i * step;
-  const idx = new Map(cps.map((c, i) => [c.slug, i]));
   const maxSessions = Math.max(1, ...cps.map((c) => c.sessions.length));
   const r = (c) => 8 + 12 * Math.sqrt(c.sessions.length / maxSessions);
+  const pos = new Map();  // slug -> where its node is drawn
+  columns.forEach((col, i) => col.members.forEach((slug, k) =>
+    pos.set(slug, { x: x(i), y: axisY + k * stackGap, r: r(bySlug.get(slug)) })));
 
   host.appendChild(svg("line", { x1: padX - 30, y1: axisY, x2: W - padX + 30, y2: axisY,
     stroke: "var(--baseline)", "stroke-width": 2 }));
+  // a stack's spine, from the node on the axis down to its last member
+  columns.forEach((col, i) => {
+    if (col.members.length < 2) return;
+    host.appendChild(svg("line", { x1: x(i), y1: axisY, x2: x(i),
+      y2: axisY + (col.members.length - 1) * stackGap, stroke: "var(--baseline)", "stroke-width": 2 }));
+  });
 
   // link arcs, drawn first so nodes sit above them
   DATA.links.forEach(([a, b], k) => {
-    if (!idx.has(a) || !idx.has(b)) return;
-    const i = idx.get(a), j = idx.get(b);
-    const x1 = x(Math.min(i, j)), x2 = x(Math.max(i, j));
+    if (!pos.has(a) || !pos.has(b)) return;
+    const [l, q] = pos.get(a).x <= pos.get(b).x ? [pos.get(a), pos.get(b)] : [pos.get(b), pos.get(a)];
     const lift = 22 + 11 * (k % 6);
-    const path = svg("path", {
-      d: `M ${x1} ${axisY - 12} Q ${(x1 + x2) / 2} ${axisY - 12 - lift * 2} ${x2} ${axisY - 12}`,
-      fill: "none", stroke: "var(--accent)", "stroke-width": 2, opacity: 0.55,
-    });
+    const d = l.x === q.x
+      // two takes at one stage: a small arc beside the spine
+      ? `M ${l.x + 10} ${l.y} Q ${l.x + 34} ${(l.y + q.y) / 2} ${q.x + 10} ${q.y}`
+      : `M ${l.x} ${l.y - 12} Q ${(l.x + q.x) / 2} ${Math.min(l.y, q.y) - 12 - lift * 2} ${q.x} ${q.y - 12}`;
+    const path = svg("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2, opacity: 0.55 });
     path.addEventListener("mousemove", (e) => tip(e, [`link: ${a} — ${b}`, "these load together"]));
     path.addEventListener("mouseleave", untip);
     host.appendChild(path);
   });
 
-  cps.forEach((c, i) => {
-    const active = inPack.has(c.slug) || (loadedSet.has(c.slug) && DATA.load.included.length === 0);
-    const g = svg("g", { style: "cursor:pointer" });
-    // generous hit target, independent of mark size
-    g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: 26, fill: "transparent" }));
-    g.appendChild(svg("circle", {
-      cx: x(i), cy: axisY, r: r(c),
-      fill: active ? "var(--accent)" : "var(--neutral-mark)",
-      stroke: "var(--surface-1)", "stroke-width": 2,
-    }));
-    if (c.slug === DATA.current) {
-      g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: r(c) + 5, fill: "none",
-        stroke: "var(--text-primary)", "stroke-width": 2 }));
-      g.appendChild(svg("text", { x: x(i), y: axisY + r(c) + 34, "text-anchor": "middle",
-        fill: "var(--text-primary)", "font-weight": "650", text: "current" }));
+  columns.forEach((col, i) => {
+    const stacked = col.members.length > 1;
+    // the column's name, when the node's own does not say it
+    if (!col.ghost && (stacked || col.members[0] !== col.stage)) {
+      const top = pos.get(col.members[0]);
+      host.appendChild(svg("text", { x: top.x, y: axisY - top.r - 26, "text-anchor": "middle",
+        fill: "var(--text-secondary)", "font-size": "11", "font-weight": "600",
+        text: col.stage + (stacked ? ` ×${col.members.length}` : "") }));
     }
-    g.appendChild(svg("text", { x: x(i), y: axisY + r(c) + 20, "text-anchor": "middle",
-      fill: "var(--text-primary)", "font-weight": "600", text: c.slug }));
-    g.appendChild(svg("text", { x: x(i), y: axisY - r(c) - 10, "text-anchor": "middle",
-      fill: "var(--muted)", text: c.created.slice(0, 10) }));
-    const toks = c.sessions.reduce((s, x) => s + x.tokens, 0);
-    g.addEventListener("mousemove", (e) => tip(e, [
-      c.slug,
-      `${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"} · ~${toks} tokens`,
-      active ? "included in the next mh load" : "not in the next mh load",
-    ]));
-    g.addEventListener("mouseleave", untip);
-    g.addEventListener("click", () => selectCheckpoint(c.slug));
-    host.appendChild(g);
+    col.members.forEach((slug, k) => {
+      const c = bySlug.get(slug), p = pos.get(slug);
+      const active = inPack.has(slug) || (loadedSet.has(slug) && DATA.load.included.length === 0);
+      const isCurrent = slug === DATA.current;
+      const g = svg("g", { style: "cursor:pointer" });
+      // generous hit target, independent of mark size
+      g.appendChild(svg("circle", { cx: p.x, cy: p.y, r: 22, fill: "transparent" }));
+      g.appendChild(svg("circle", {
+        cx: p.x, cy: p.y, r: p.r,
+        fill: active ? "var(--accent)" : "var(--neutral-mark)",
+        stroke: "var(--surface-1)", "stroke-width": 2,
+      }));
+      if (isCurrent) {
+        g.appendChild(svg("circle", { cx: p.x, cy: p.y, r: p.r + 5, fill: "none",
+          stroke: "var(--text-primary)", "stroke-width": 2 }));
+      }
+      if (k === 0) {
+        g.appendChild(svg("text", { x: p.x, y: p.y + p.r + 20, "text-anchor": "middle",
+          fill: "var(--text-primary)", "font-weight": "600", text: slug }));
+        if (isCurrent) g.appendChild(svg("text", { x: p.x, y: p.y + p.r + 34, "text-anchor": "middle",
+          fill: "var(--text-primary)", "font-weight": "650", text: "current" }));
+        g.appendChild(svg("text", { x: p.x, y: p.y - p.r - 10, "text-anchor": "middle",
+          fill: "var(--muted)", text: c.created.slice(0, 10) }));
+      } else {
+        // a stacked take: named beside its node, where the next one is not
+        g.appendChild(svg("text", { x: p.x + p.r + 9, y: p.y + 4, "font-size": "11.5",
+          fill: "var(--text-primary)", "font-weight": isCurrent ? "650" : "600",
+          text: slug + (isCurrent ? " · current" : "") }));
+      }
+      const toks = c.sessions.reduce((s, x) => s + x.tokens, 0);
+      g.addEventListener("mousemove", (e) => tip(e, [
+        slug + (col.stage !== slug ? ` · at ${col.stage}` : ""),
+        `created ${c.created.slice(0, 10)} · ${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"} · ~${toks} tokens`,
+        active ? "included in the next mh load" : "not in the next mh load",
+      ]));
+      g.addEventListener("mouseleave", untip);
+      g.addEventListener("click", () => selectCheckpoint(slug));
+      host.appendChild(g);
+    });
+    if (col.ghost) {
+      const n = DATA.template.stages.findIndex((st) => st.slug === col.stage) + 1;
+      const first = ahead[0] && ahead[0].slug === col.stage;
+      const g = svg("g", { style: RO ? "" : "cursor:pointer" });
+      g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: 26, fill: "transparent" }));
+      g.appendChild(svg("circle", { cx: x(i), cy: axisY, r: 8, fill: "var(--page)",
+        stroke: "var(--muted)", "stroke-width": 2, "stroke-dasharray": "3 3" }));
+      g.appendChild(svg("text", { x: x(i), y: axisY + 28, "text-anchor": "middle",
+        fill: "var(--muted)", text: col.stage }));
+      g.addEventListener("mousemove", (e) => tip(e, [
+        col.name,
+        `stage ${n} of ${DATA.template.total} in ${DATA.template.name} — not created yet`,
+        RO ? "" : (first ? "click to create it (it becomes current)" : "click to create it out of turn"),
+      ].filter(Boolean)));
+      g.addEventListener("mouseleave", untip);
+      if (!RO) g.addEventListener("click", () => createCheckpoint(col.name));
+      host.appendChild(g);
+    }
   });
 }
 
+// --- project memory --------------------------------------------------------
+// Claude Code keeps notes about this project next to its transcripts; mh shows
+// them read-only. Each card is a note: its markdown body, the notes it links
+// to (clickable), and — reusing the trace path — a jump to the session it came
+// from when that transcript is still here.
+
+let MEMORY = null, MEM_OPEN = true;
+const MEM_KEY = "mh.memory";  // localStorage: "0" keeps the section collapsed
+
+async function loadMemory() {
+  try { MEMORY = await api("/api/memory"); }
+  catch { MEMORY = { present: false, memories: [] }; }
+  MEM_OPEN = localStorage.getItem(MEM_KEY) !== "0";
+  drawMemory();
+}
+
+function drawMemory() {
+  const d = MEMORY;
+  $("memsec").hidden = !(d && d.present && d.memories.length);
+  if ($("memsec").hidden) return;
+  const n = d.memories.length;
+  $("memmeta").textContent = `${n} note${n === 1 ? "" : "s"} Claude Code keeps about this project · read-only`;
+  $("memtoggle").textContent = MEM_OPEN ? "hide" : `show ${n}`;
+  const list = $("memlist");
+  list.hidden = !MEM_OPEN;
+  list.textContent = "";
+  if (!MEM_OPEN) return;
+  const names = d.memories.map((m) => m.name);
+  d.memories.forEach((m) => list.appendChild(memoryCard(m, names)));
+}
+
+function memoryCard(m, names) {
+  const card = el("div", { class: "memcard", id: "mem-" + m.name });
+  const head = el("header", {},
+    el("span", { class: "mtype " + m.type, text: m.type }),
+    el("span", { class: "mtitle", text: m.title || m.name }));
+  head.appendChild(el("span", { class: "spacer" }));
+  if (m.modified) head.appendChild(el("span", { class: "muted", style: "font-size:12px", text: m.modified }));
+  if (m.origin) {
+    const from = el("span", { class: "muted", style: "font-size:12px", text: " · from " });
+    from.appendChild(el("code", { text: m.origin_key }));
+    if (m.origin_here) from.appendChild(el("button", { class: "linklike", style: "margin-left:6px",
+      text: "open session ↗", title: "Show that session's full transcript in the live panel",
+      onclick: () => openOriginal(m.origin) }));
+    head.appendChild(from);
+  }
+  card.appendChild(head);
+  card.appendChild(md(m.body));
+  if (m.links.length) {
+    const rel = el("div", { class: "mrel" }, el("span", { text: "related:" }));
+    m.links.forEach((name) => {
+      const known = names.includes(name);
+      rel.appendChild(el("button", { class: "memchip" + (known ? "" : " missing"), text: name,
+        title: known ? "Jump to this note" : "Not written yet",
+        onclick: known ? () => jumpToMemory(name) : null }));
+    });
+    card.appendChild(rel);
+  }
+  return card;
+}
+
+function jumpToMemory(name) {
+  const card = $("mem-" + name);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.remove("flash");
+  void card.offsetWidth;  // restart the animation
+  card.classList.add("flash");
+}
+
+// --- checkpoint panel ------------------------------------------------------
 // --- checkpoint panel ------------------------------------------------------
 
 // bright HEY-style avatar circles: deterministic color from the session key
@@ -918,7 +1120,8 @@ function selectCheckpoint(slug) {
   const c = DATA.checkpoints.find((x) => x.slug === slug);
   if (!c) { $("ckptsec").hidden = true; return; }
   $("ckptsec").hidden = false;
-  $("ckpttitle").textContent = `${c.slug} · created ${c.created.replace("_", " ")}`;
+  const at = c.stage && c.stage !== c.slug ? ` · at ${c.stage}` : "";
+  $("ckpttitle").textContent = `${c.slug}${at} · created ${c.created.replace("_", " ")}`;
   const omitted = new Set(DATA.load.omitted);
   const list = $("sessions");
   list.textContent = "";
@@ -964,6 +1167,7 @@ async function openSession(slug, file) {
     (data.editable && !RO ? "" : "  — read-only");
   const host = $("exchanges");
   host.textContent = "";
+  drawProvenance(data);
   if (!data.editable) {
     host.appendChild(el("p", { class: "empty", text: data.reason || "not editable" }));
   }
@@ -984,6 +1188,36 @@ async function openSession(slug, file) {
   }
   data.exchanges.forEach((ex) => host.appendChild(exchangeCard(data, ex)));
   $("sessec").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// Where a saved session came from: its original transcript, linked by the
+// session id in the file. When that transcript is still on this machine, the
+// live panel can open it unfiltered — the place to check what purification
+// left out. Otherwise the id is shown as the record it is.
+function drawProvenance(data) {
+  const host = $("prov");
+  host.textContent = "";
+  if (!data.session_id) return;
+  host.appendChild(el("span", { class: "muted", text: "from session " }));
+  host.appendChild(el("code", { text: data.original ? data.original.key : data.session_id }));
+  if (data.original) {
+    host.appendChild(el("button", { class: "linklike", text: "open original ↗",
+      title: "Show this session's full transcript — thinking, tool calls and all — in the live panel",
+      onclick: () => openOriginal(data.session_id) }));
+  } else {
+    host.appendChild(el("span", { class: "muted",
+      text: " · original transcript not on this machine" }));
+  }
+}
+
+// The original transcript opens on a page of its own (`?view=`), so the
+// purified session stays where the reader was and the two can sit side by side.
+function viewUrl(sid) {
+  return location.pathname + "?t=" + encodeURIComponent(TOKEN) + "&view=" + encodeURIComponent(sid);
+}
+function openOriginal(sid) {
+  const w = window.open(viewUrl(sid), "_blank", "noopener");
+  if (!w) toast("the browser blocked the new page — allow pop-ups for this map", "err");
 }
 
 function exchangeCard(data, ex) {
@@ -1044,12 +1278,15 @@ const LIVE_HIDDEN_MS = 20000; // background tab: keep the fp warm, nothing more
 const LIVE_TAIL = 3;          // exchanges shown by default: the feed is about now
 // `?sid=` pins the live panel to one session: `mh ui` run from inside an agent
 // session names its own, so the page follows the session that asked for it
-let LIVE = null, LIVE_SID = PARAMS.get("sid") || null, LIVE_EDIT = null, LIVE_TIMER = null;
+// `?view=` opens a page for one transcript (from "open original"): pinned for
+// good, unlike `?sid=`, which lets go of a session that has ended
+const VIEW = PARAMS.get("view") || null;
+let LIVE = null, LIVE_SID = VIEW || PARAMS.get("sid") || null, LIVE_EDIT = null, LIVE_TIMER = null;
 let LIVE_ERR = false;
 // A pin from the link (as opposed to a pick from the menu) holds only while
 // that session is alive: once it has been quiet this long and the project has
 // a newer transcript, the page follows what is happening now instead.
-let LIVE_PINNED = PARAMS.get("sid") || null;
+let LIVE_PINNED = VIEW ? null : (PARAMS.get("sid") || null);
 const LIVE_QUIET = 600;  // seconds
 
 function niceIdle(secs) {
@@ -1066,7 +1303,7 @@ function followNewest(why) {
   if (why) toast(why, "ok");
   runLive();
 }
-let LIVE_ALL = false;         // the reader asked for the whole session
+let LIVE_ALL = !!VIEW;        // the reader asked for the whole session (a viewer page starts with it)
 // which tool calls the reader has opened, kept across redraws so a poll two
 // seconds later does not close what they are in the middle of reading
 const LIVE_OPEN = new Set();
@@ -1177,16 +1414,19 @@ function drawComposer(term) {
   $("sayto").className = "to" + (term.pane ? "" : " off");
   $("say").disabled = !ok;
   $("say-send").disabled = !ok;
+  $("say-slash").disabled = !ok;
 }
 
 async function say() {
   const text = $("say").value.trim();
   if (!text) return;
   $("say-send").disabled = true;
+  closePalette();
   try {
     const r = await post("/api/live/say", { text, sid: LIVE_SID });
     $("say").value = "";
-    toast(`sent to ${r.pane}`, "ok");
+    const cmd = slashState(text);
+    toast(cmd ? `sent /${cmd.name} to ${r.pane}` : `sent to ${r.pane}`, "ok");
     LIVE = null;
     await pollLive();   // the turn shows up as soon as the agent writes it
   } catch (e) {
@@ -1194,6 +1434,163 @@ async function say() {
   } finally {
     $("say-send").disabled = false;
   }
+}
+
+// --- the composer's palette ------------------------------------------------
+// What the box offers when a message starts with "/": the CLI's own skills
+// and commands, read from disk by mh, and the models behind /model. The text
+// is composed here and pasted into the session — the CLI runs it, exactly as
+// if it had been typed at its prompt, so nothing here needs to know what a
+// command does.
+
+// The slash command a message is, or null for prose: {name, args} with args
+// null while the name is still being typed and a string once a space follows
+// it. A second line ends it — a command is one line.
+function slashState(text) {
+  if (text.includes("\n")) return null;
+  const m = /^\/(\S*)(?:\s+(.*))?$/.exec(text);
+  if (!m) return null;
+  return { name: m[1], args: m[2] === undefined ? null : m[2] };
+}
+
+// Ranked: an exact name, then a name starting with the query, then one
+// containing it, then a description containing it; ties keep list order.
+function paletteMatches(items, query) {
+  const q = query.toLowerCase();
+  const rank = (it) => {
+    if (!q) return 0;
+    const n = it.name.toLowerCase();
+    if (n === q) return 0;
+    if (n.startsWith(q)) return 1;
+    if (n.includes(q)) return 2;
+    return (it.description || "").toLowerCase().includes(q) ? 3 : -1;
+  };
+  return items.map((it, i) => ({ it, r: rank(it), i }))
+    .filter((x) => x.r >= 0)
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.it);
+}
+
+// the models /model may be given: the CLI's aliases, then what this session
+// has already used, newest first
+function modelItems(cmds) {
+  const seen = [];
+  for (const ex of (LIVE ? LIVE.exchanges : []).slice().reverse())
+    for (const m of String(ex.model || "").split(", ")) if (m && !seen.includes(m)) seen.push(m);
+  return [
+    ...(cmds.models || []).map((m) => ({ name: m.name, description: m.description, kind: "alias" })),
+    ...seen.map((m) => ({ name: m, description: modelLabel(m), kind: "used here" })),
+  ];
+}
+
+let COMMANDS = null, COMMANDS_KEY = "", COMMANDS_AT = 0;
+const COMMANDS_TTL = 60000;  // a skill installed mid-session shows up within a minute
+const PALETTE = { mode: null, items: [], sel: 0, seq: 0 };
+
+async function loadCommands() {
+  const key = LIVE ? LIVE.key : "";
+  if (COMMANDS && COMMANDS_KEY === key && Date.now() - COMMANDS_AT < COMMANDS_TTL) return COMMANDS;
+  const q = new URLSearchParams();
+  if (LIVE_SID) q.set("sid", LIVE_SID);
+  COMMANDS = await api("/api/live/commands?" + q);
+  COMMANDS_KEY = key;
+  COMMANDS_AT = Date.now();
+  return COMMANDS;
+}
+
+function closePalette() {
+  $("palette").hidden = true;
+  PALETTE.mode = null;
+  PALETTE.items = [];
+}
+
+async function updatePalette() {
+  const st = slashState($("say").value);
+  if (!st || $("say").disabled) { closePalette(); return; }
+  const seq = ++PALETTE.seq;
+  let cmds;
+  try { cmds = await loadCommands(); } catch (e) { closePalette(); toast(e.message, "err"); return; }
+  if (seq !== PALETTE.seq) return;  // the box changed while the list was loading
+  if (st.args === null) {
+    PALETTE.mode = "commands";
+    PALETTE.items = paletteMatches(cmds.commands || [], st.name);
+  } else if (st.name === "model" && (cmds.commands || []).some((c) => c.name === "model")) {
+    PALETTE.mode = "models";
+    PALETTE.items = paletteMatches(modelItems(cmds), st.args);
+  } else {
+    closePalette();  // a finished name: the rest of the line is its arguments
+    return;
+  }
+  PALETTE.sel = 0;
+  drawPalette(cmds);
+}
+
+function drawPalette(cmds) {
+  const box = $("palette");
+  box.textContent = "";
+  box.hidden = false;
+  const models = PALETTE.mode === "models";
+  let head;
+  if (models) head = "/model — a name the CLI resolves, or a model this session has used";
+  else if (cmds.known) head = `skills and commands of ${cmds.agent} — ↑↓ choose · ⏎ or ⇥ inserts · esc closes`;
+  else head = `no command list for ${cmds.agent} — mh has not verified how it spells them; type it and it goes through all the same`;
+  box.appendChild(el("div", { class: "phead", text: head }));
+  if (!PALETTE.items.length && cmds.known)
+    box.appendChild(el("div", { class: "pempty", text: "nothing on the list matches — what you typed goes through all the same" }));
+  PALETTE.items.forEach((it, i) => {
+    const kind = it.kind === "builtin" ? "built-in"
+      : it.where && it.where !== it.kind && it.where !== cmds.agent ? `${it.kind} · ${it.where}` : it.kind;
+    const row = el("div", { class: "pitem" + (i === PALETTE.sel ? " sel" : ""),
+      // mousedown, not click: the box must keep the keyboard
+      onmousedown: (e) => { e.preventDefault(); pickPalette(i); } },
+      el("span", { class: "pname", text: (models ? "" : "/") + it.name }),
+      it.hint ? el("span", { class: "phint", text: it.hint }) : null,
+      el("span", { class: "pdesc", text: it.description || "" }),
+      el("span", { class: "pkind", text: kind }));
+    box.appendChild(row);
+  });
+}
+
+function movePalette(step) {
+  if (!PALETTE.items.length) return;
+  PALETTE.sel = (PALETTE.sel + step + PALETTE.items.length) % PALETTE.items.length;
+  const rows = $("palette").querySelectorAll(".pitem");
+  rows.forEach((r, i) => r.classList.toggle("sel", i === PALETTE.sel));
+  if (rows[PALETTE.sel]) rows[PALETTE.sel].scrollIntoView({ block: "nearest" });
+}
+
+function pickPalette(i) {
+  const it = PALETTE.items[i];
+  if (!it) return;
+  const ta = $("say");
+  if (PALETTE.mode === "models") {
+    ta.value = "/model " + it.name;
+    closePalette();
+  } else {
+    ta.value = "/" + it.name + " ";
+    updatePalette();  // /model goes on to its models; anything else is done
+  }
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function wirePalette() {
+  const ta = $("say");
+  ta.addEventListener("input", updatePalette);
+  ta.addEventListener("focus", updatePalette);
+  ta.addEventListener("blur", closePalette);
+  ta.addEventListener("keydown", (e) => {
+    if ($("palette").hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); movePalette(e.key === "ArrowDown" ? 1 : -1); }
+    else if ((e.key === "Enter" || e.key === "Tab") && !e.ctrlKey && !e.metaKey && PALETTE.items.length) { e.preventDefault(); pickPalette(PALETTE.sel); }
+    else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+  });
+  $("say-slash").onclick = () => {
+    if (!ta.value.startsWith("/")) ta.value = "/" + ta.value;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    updatePalette();
+  };
 }
 
 function liveCard(ex) {
@@ -1373,6 +1770,10 @@ function wireLive() {
 
 const otherCheckpoints = () => DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
 
+function createCheckpoint(name, at) {
+  act("/api/checkpoint/create", { name, at }, (r) => `checkpoint ${r.slug} created`);
+}
+
 function deleteSession(s) {
   if (!confirm(`Delete session ${s.file}? The hub keeps it in git history.`)) return;
   $("sessec").hidden = true;
@@ -1389,9 +1790,52 @@ function moveSession(s, anchor) {
 
 function wire() {
   $("reload").onclick = $("budget").onchange = () => refresh();
-  $("newckpt").onclick = () =>
-    ask($("newckpt"), "new checkpoint — it becomes current", "", (name) =>
-      act("/api/checkpoint/create", { name }, (r) => `checkpoint ${r.slug} created`));
+  $("memtoggle").onclick = () => {
+    MEM_OPEN = !MEM_OPEN;
+    localStorage.setItem(MEM_KEY, MEM_OPEN ? "1" : "0");
+    drawMemory();
+  };
+  $("newckpt").onclick = () => {
+    const t = DATA.template, ahead = t ? t.stages.filter((st) => !st.exists) : [];
+    const cur = DATA.checkpoints.find((c) => c.slug === DATA.current);
+    const here = cur ? (cur.stage || cur.slug) : null;
+    if (!ahead.length && !here) {
+      ask($("newckpt"), "new checkpoint — it becomes current", "", createCheckpoint);
+      return;
+    }
+    // the template's next stage, one more take at the current stage, the rest
+    // of the stages, or any name
+    const other = "another name…", again = here ? `another at ${here} (${here}-N)` : null;
+    const label = (st, k) => (k === 0 ? "▶ " : "") + st.name +
+      (k === 0 ? ` — next (stage ${t.stages.indexOf(st) + 1} of ${t.total})` : "");
+    const byLabel = new Map(ahead.map((st, k) => [label(st, k), st.name]));
+    const items = [...byLabel.keys()];
+    if (again) items.splice(Math.min(1, items.length), 0, again);
+    menu($("newckpt"), t ? `new checkpoint — ${t.name} template` : "new checkpoint", [...items, other], "",
+      (pick) => {
+        if (pick === other) ask($("newckpt"), "new checkpoint — it becomes current", "", createCheckpoint);
+        else if (pick === again) createCheckpoint(null, here);
+        else createCheckpoint(byLabel.get(pick));
+      });
+  };
+  $("tmpl").onclick = () => {
+    const cur = DATA.template ? DATA.template.name : null;
+    const none = "none — name every checkpoint yourself";
+    const label = (t) => `${t.name === cur ? "✓ " : ""}${t.name} — ${t.stages.length} stages: ` +
+      t.stages.map((st) => st.name).join(" → ");
+    const byLabel = new Map(DATA.templates.map((t) => [label(t), t.name]));
+    menu($("tmpl"), "stage template — default names for the checkpoints ahead",
+      [...byLabel.keys(), ...(cur ? [none] : [])], "", (pick) => {
+        const name = pick === none ? null : byLabel.get(pick);
+        if (name === cur) return;
+        act("/api/template", { name },
+          name ? `template ${name} — mh names the stages from here` : "template cleared");
+      });
+  };
+  $("ck-another").onclick = () => {
+    const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
+    if (c) createCheckpoint(null, c.stage || c.slug);
+  };
   $("ck-rename").onclick = () =>
     ask($("ck-rename"), `rename ${SEL_CK} to…`, SEL_CK, (name) => {
       $("sessec").hidden = true;
@@ -1418,8 +1862,15 @@ async function refresh() {
   const budget = $("budget").value;
   DATA = await api("/api/map?budget=" + encodeURIComponent(budget === "" ? "none" : budget));
   $("current").textContent = DATA.current ? "current: " + DATA.current : "no current checkpoint";
+  const t = DATA.template;
+  $("tmpl").textContent = t ? `template: ${t.name} ▾` : "template ▾";
+  $("tmpl").title = t
+    ? `${t.done} of ${t.total} stages created` + (t.next ? ` · next: ${t.next}` : "")
+    : "Stage template: default names for the checkpoints ahead";
+  $("legend-ahead").hidden = !(t && t.done < t.total);
   if (DATA.load.error) toast(DATA.load.error, "err");
   drawMap();
+  loadMemory();
   if (SEL_CK && !DATA.checkpoints.some((c) => c.slug === SEL_CK)) {
     SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
   }
@@ -1429,12 +1880,20 @@ async function refresh() {
 
 wire();
 wireLive();
+wirePalette();
 $("budget").value = CFG.budget ?? "";
 $("hubpath").textContent = CFG.hub;
 if (CFG.version) document.title += " · v" + CFG.version;
+if (VIEW) {
+  document.body.classList.add("viewonly");
+  document.querySelector("header h1").textContent = "mh — original transcript";
+  document.querySelector("#livesec h2").firstChild.textContent = "Original transcript";
+  document.title = "mh — original ‹" + VIEW.slice(0, 8) + "›";
+}
 if (RO) {
   $("robadge").hidden = false;
   $("newckpt").hidden = true;
+  $("tmpl").hidden = true;
   $("ckactions").hidden = true;
 }
 refresh().catch((e) => toast(e.message, "err"));

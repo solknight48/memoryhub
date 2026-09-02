@@ -52,12 +52,30 @@ checkpoints load together, their sessions merged in time order.
 - `mh checkpoint <name>` — start a new checkpoint (becomes current). Only when
   the user declares a new workstream or stage. Names may be in any script
   (`mh checkpoint 数据管道` is fine).
+- **Another take at the same stage** ("second design", "再开一个 design",
+  "one checkpoint per worktree at this stage"): `mh checkpoint --at <stage>`
+  names it `<stage>-2`, `<stage>-3`, …; `mh checkpoint <name> --at <stage>`
+  keeps a name of the user's choosing. Same-stage checkpoints stack under one
+  node of the map and stay independent unless linked.
+- **Stage templates** — when the user asks for a project-stage template or
+  default checkpoint names ("use the quant template", "按量化流程建
+  checkpoint", "what templates are there"): `mh template --list` shows them
+  (quant, frontend, backend, sdlc, mobile, devops, data, ml, sprint, hotfix);
+  `mh template <name>` records the choice. With a template set, `mh checkpoint`
+  with no name creates the next stage — prefer it over inventing a name when the
+  user says "next stage" / "下一阶段" — and `mh template` alone shows the
+  progress. `mh template --clear` stops using one. Only on explicit request.
 - `mh link A B` / `mh unlink A B` — only on explicit user request.
 - Curation (`mh rm <ckpt>[/<session>] [-x N]`, `mh mv`, `mh rename`,
   `mh edit <ckpt>/<session> -x N --user/--agent`) — only on explicit user
   request ("delete that exchange", "移除这段", "rename the checkpoint"). Every
   curation is a hub commit; tell the user `git -C .memoryhub revert HEAD` is
   the undo.
+- `mh trace <ckpt>/<session>` — find the original transcript a saved session
+  was purified from ("show me the real session", "回到原始记录", "check what was
+  cut"). Prints the `.jsonl` path when it is still on this machine. In the web
+  UI the session panel links "open original", which opens the full transcript
+  in the live panel.
 - Navigation (`mh back`, `mh forward`, `mh goto <ckpt>`) — only on explicit
   user request; afterwards tell the user which checkpoint is now current.
 - If the user wants load/save to happen automatically, offer `mh hook install`
@@ -73,6 +91,9 @@ checkpoints load together, their sessions merged in time order.
   running instead of starting another, and follows THIS session's live panel
   (it reads `CLAUDE_CODE_SESSION_ID`). Never a bare `mh ui` (it blocks the
   shell). `mh ui --stop` ends the server — only on the user's request.
+- The map also shows this project's Claude Code auto-memory (the `memory/`
+  folder beside the transcripts) read-only, under the timeline — no command,
+  it is just there when the folder exists.
 
 ## Taking over a project with existing history
 When the user asks to take over a project, import old sessions, or backfill

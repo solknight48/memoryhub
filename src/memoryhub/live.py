@@ -99,6 +99,19 @@ def pick(cands: list[agents.Discovered], sid: str | None = None):
     raise MhError(f"no session '{sid}' among this project's transcripts")
 
 
+def find(hub: Path, sid: str) -> agents.Discovered | None:
+    """The original transcript for a saved session's id, if it is still on this
+    machine — the purified file records the id, mh resolves it on demand rather
+    than storing a path that would rot. None when it has been deleted, or the
+    save came from elsewhere."""
+    if not sid:
+        return None
+    for d in candidates(project_root_of(hub)):
+        if sid in (d.sid, d.key):
+            return d
+    return None
+
+
 def read(hub: Path, sid: str | None = None, full: bool = False) -> LiveSession | None:
     """Purify the live transcript in memory. None when the project has none.
     `full` also collects the unfiltered stream, a second pass nothing but the

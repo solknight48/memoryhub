@@ -199,6 +199,28 @@ def test_a_pane_that_is_no_longer_there_falls_back_to_looking(mh, ws, hub_projec
     assert "not running inside tmux" in where["reason"]
 
 
+@needs_tmux
+def test_a_pane_another_session_has_since_taken_is_not_a_restart(mh, ws, hub_project, tmux):
+    """Two sessions, one pane: the old one quit, a new one started there (its
+    own record, alive). Viewed from its own page, the old session must not be
+    handed the pane — the keys would land in the new session."""
+    pane = tmux["start"](cwd=str(hub_project))
+    hub = hub_of(hub_project)
+    live = live_session(ws, hub_project)
+    dead = subprocess.Popen(["sleep", "30"])
+    dead.terminate()
+    dead.wait(timeout=TIMEOUT)
+    relay.record(hub, live.sid, pane, dead.pid, str(hub_project))
+    newer = "ffffffff-2222-4222-8222-222222222222"
+    relay.record(hub, newer, pane, relay.panes()[pane]["pid"], str(hub_project))
+
+    where = relay.target(hub, live)
+    assert "pane" not in where
+    assert "now runs session ‹ffffffff›" in where["reason"]
+    with pytest.raises(MhError, match="now runs session"):
+        relay.send(hub, "hello?")
+
+
 # --- what the hook records ----------------------------------------------------
 
 

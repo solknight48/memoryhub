@@ -238,6 +238,18 @@ def target(hub: Path, live: livemod.LiveSession) -> dict:
             return {"pane": pane, "pid": pid, "how": "recorded at session start"}
         if pid is None and info["command"] in AGENT_COMMS:
             return {"pane": pane, "pid": None, "how": "recorded at session start"}
+        # Another session recorded this pane later and is still alive in it:
+        # the pane is theirs now. Without this, an old session viewed from its
+        # own page would type into whichever session runs there today.
+        for other, orec in read_panes(hub).items():
+            if other == live.sid or not isinstance(orec, dict) or orec.get("pane") != pane:
+                continue
+            opid = orec.get("pid")
+            if isinstance(opid, int) and _alive(opid) and _in_pane(opid, info["pid"]):
+                return {
+                    "reason": f"tmux pane {pane} now runs session ‹{other[:8]}›, not this "
+                    "one; open that session to type into it"
+                }
         # `claude -c` after a quit: the pane holds an agent of this project
         # again — the session resumed, not "whatever took its place"
         again = _agent_in_pane(info, project_root_of(hub))

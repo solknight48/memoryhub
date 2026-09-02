@@ -62,14 +62,16 @@ $ mh load                        # sessions of BOTH, merged in time order
 
 | Command | What it does |
 |---|---|
-| `mh init [--global] [--claude]` | Create the hub. |
-| `mh checkpoint <name>` | New checkpoint; becomes current. |
+| `mh init [--global] [--claude] [--template T]` | Create the hub. |
+| `mh checkpoint [name] [--at STAGE]` | New checkpoint; becomes current. No name: the template's next stage; `--at` alone: one more take at a stage (`design-2`). |
+| `mh template [name] [--list] [--clear]` | Stage template — default names for the checkpoints ahead. |
 | `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | Purify the current session into a checkpoint. |
 | `mh save [CKPT] --compact --file MD` | Store an agent-written summary instead of the full dialog. |
 | `mh import [--to CKPT] [--agent A]... [--dry-run]` | Backfill this project's past sessions (Claude Code, pi, Codex). |
 | `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | Warm-start pack: selection + linked closure, time-merged. |
 | `mh link A B` / `mh unlink A B` | Make checkpoints load together / stop that. |
 | `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | Inspect the hub. |
+| `mh trace CKPT/SESSION` | Find the original transcript a saved session was purified from. |
 | `mh rm CKPT[/SESSION] [-x N] [--force]` | Delete a checkpoint, a session, or one exchange. |
 | `mh mv CKPT/SESSION CKPT` / `mh rename CKPT NAME` | Move a session / rename a checkpoint. |
 | `mh edit CKPT/SESSION -x N [--user T] [--agent T]` | Rewrite one side of an exchange. |
@@ -78,7 +80,7 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort. |
 | `mh hubs [--prune]` | All registered hubs. |
 | `mh ui [--port N] [--budget N\|none] [--read-only] [--detach] [--stop] [--session ID]` | Open the checkpoint map in a browser and curate the hub. |
-| `mh hook install [--user] [--remove]` | Automate load/save through Claude Code hooks. |
+| `mh hook install [--user] [--remove] [--budget N]` | Automate load/save through Claude Code hooks. |
 | `mh skill install` | Install the Claude Code skill. |
 
 ## Saving: purified, or compacted
@@ -153,6 +155,13 @@ Every change is a commit in the hub, so `git -C .memoryhub revert` is the undo.
 from a terminal — `mh rm`, `mh mv`, `mh rename`, `mh edit` — so an agent can
 curate memory on request without a browser.
 
+Under the timeline sits **project memory** — the notes Claude Code keeps about
+this project (`~/.claude/projects/<project>/memory/`), shown read-only: one card
+per note with its type, its markdown body, the notes it links to (`[[name]]`,
+clickable), and — when that transcript is still here — the session it came
+from, opened on a page of its own. mh does not own that folder and never writes it; it just shows it next to
+the checkpoints.
+
 Under the map sits the **live session**: the transcript the agent is writing
 right now, re-read whenever it grows, so what you type in the terminal shows up
 in the browser a breath later. The feed shows the newest three exchanges — the
@@ -186,6 +195,17 @@ quits and takes the tmux session with it; a shell pane outlives `claude -c`
 restarts, and mh recognises the agent that comes back in it. Typing back is
 Linux-only for now — mh reads `/proc` to prove the pane still holds the agent.
 
+The box is also a **projection of the CLI's input**: a message that starts with
+`/` lists the skills and commands of the session's own agent — read from disk by
+mh (`~/.claude/skills`, the project's `.claude/skills`, `commands/`, installed
+plugins; pi's `~/.pi/agent/skills`) plus the few built-ins worth sending from a
+browser; after `/model` come the names the CLI resolves and the models this
+session has used. ↑↓ choose, ⏎ or ⇥ inserts, add the arguments, Ctrl+⏎ sends —
+the message is pasted into the session as usual and the CLI runs it, so the
+page never needs to know what a command does, and anything not on the list goes
+through all the same. An agent mh has not verified (codex) gets no list, just a
+line saying so.
+
 Safety: loopback-only, a one-shot token minted per run, and the `Host` header
 checked; the page is self-contained and works offline. **mh will not rewrite a
 file it cannot reproduce byte-for-byte** — it parses and re-renders first, and
@@ -213,12 +233,40 @@ re-running later picks up only what's new.
 
 - **Loading**: `mh load` takes the current checkpoint (or the ones you name),
   expands across links, and emits whole sessions oldest → newest within
-  `--budget` (default ~6000 tokens, keeping the newest contiguous suffix).
+  `--budget` (default 20000 tokens — about a tenth of a 200k context, three
+  or four typical sessions — keeping the newest contiguous suffix; the
+  SessionStart hook takes its own size from `mh hook install --budget N`).
 - **Token estimates are CJK-aware**: ~1 token per CJK character, ~4 ASCII
   characters per token — close enough for budgeting, with no tokenizer
   dependency.
 - **Names in any script**: `mh checkpoint 数据管道` is as first-class as
   `mh checkpoint backtest`.
+- **Several checkpoints at one stage**: `design`, `design-2`, `design-3`
+  stack under one node of the timeline — a trailing number is another take at
+  the same stage, and `mh checkpoint --at design` names the next one for you.
+  `mh checkpoint dollar-bars --at research` puts a checkpoint at a stage its
+  name does not say (recorded in the hub's `stages.toml`). They stay as
+  independent as any other checkpoints — link them if they should load
+  together — so parallel attempts, or one worktree per attempt, each get their
+  own memory without leaving the stage they belong to.
+- **Stage templates**: most projects move through the same skeleton — plan,
+  design, build, test, deploy, monitor — with a field's own names for the
+  steps. `mh template --list` shows ten (quant, frontend, backend, sdlc,
+  mobile, devops, data, ml, sprint, hotfix); `mh template quant` (or
+  `mh init --template quant`) records one in the hub, and from then on
+  `mh checkpoint` with no name creates the next stage, `mh status` says where
+  the project stands, and the map draws the stages still ahead as dashed nodes
+  you can click. Nothing is created up front, so the timeline keeps its real
+  dates. The hub's `template.toml` carries a copy of the stages: edit it to
+  give a project its own sequence.
+- **Traceable to the source**: a saved session records the id of the transcript
+  it was purified from. `mh trace <ckpt>/<session>` resolves it to the original
+  `.jsonl` on this machine (or says it is elsewhere); in the map, a saved
+  session's panel links **open original ↗**, which opens the full unfiltered
+  transcript — thinking, tool calls, pictures — on a page of its own
+  (`?view=<id>`: only that transcript, pinned for good), so the purified
+  session and its source sit side by side. Nothing machine-specific is stored
+  in the hub; the id is the whole link.
 - **Every mutation is a git commit.** Undo, rename, delete, merge: plain
   `git -C .memoryhub ...` — the hub is a normal repo.
 - **Excluded, not ignored**: `mh init` writes `.git/info/exclude` in the project

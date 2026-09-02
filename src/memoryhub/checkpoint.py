@@ -89,11 +89,18 @@ def resolve(hub: Path, ref: str) -> Checkpoint:
     raise MhError(f"no checkpoint '{ref}' (see 'mh list')")
 
 
-def create(hub: Path, name: str, set_current: bool = True) -> Checkpoint:
+def create(hub: Path, name: str, set_current: bool = True, stage: str | None = None) -> Checkpoint:
+    """A new checkpoint. `stage` places it at an existing column of the
+    timeline under a name of its own; without it the name decides (see
+    `stage_of`)."""
     slug = slugify(name)
     existing = list_checkpoints(hub)
     if any(c.slug == slug for c in existing):
         raise MhError(f"checkpoint '{slug}' already exists")
+    if stage is not None and slugify(stage) != stage_of(hub, slug):
+        stages = read_stages(hub)
+        stages[slug] = slugify(stage)
+        write_stages(hub, stages)
     # Strictly increasing stamps: same-second creations bump by one second so
     # lexical dir order always equals creation order (the walk order).
     now = datetime.now().astimezone()
@@ -227,3 +234,65 @@ def partners_of(slug: str, links: list[tuple[str, str]]) -> list[str]:
         elif b == slug:
             out.add(a)
     return sorted(out)
+
+
+# --- stages -------------------------------------------------------------------
+# A stage is a column of the timeline; several checkpoints can share one —
+# design, design-2, design-3 — stacked under the same node, each as independent
+# as any other checkpoint. The name decides by default: a trailing number is
+# another take at the same stage. `stages.toml` records the exceptions, a
+# checkpoint placed at a stage its name does not say (`--at`).
+
+STAGE_SUFFIX = re.compile(r"-\d+$")
+
+
+def stages_path(hub: Path) -> Path:
+    return hub / "stages.toml"
+
+
+def read_stages(hub: Path) -> dict[str, str]:
+    """Explicit placements: checkpoint slug -> stage slug."""
+    path = stages_path(hub)
+    if not path.is_file():
+        return {}
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    table = data.get("stages", {})
+    return {str(k): str(v) for k, v in table.items()} if isinstance(table, dict) else {}
+
+
+def write_stages(hub: Path, stages: dict[str, str]) -> None:
+    rows = "".join(f"{json.dumps(k)} = {json.dumps(v)}\n" for k, v in sorted(stages.items()))
+    stages_path(hub).write_text("[stages]\n" + rows, encoding="utf-8")
+
+
+def stage_of(hub: Path, slug: str, explicit: dict[str, str] | None = None) -> str:
+    placed = (explicit if explicit is not None else read_stages(hub)).get(slug)
+    if placed:
+        return placed
+    base = STAGE_SUFFIX.sub("", slug)
+    return base or slug
+
+
+def stages(hub: Path, cps: list[Checkpoint] | None = None) -> list[dict]:
+    """The timeline's columns in order — a stage sits where its first
+    checkpoint was created — each with its members in creation order."""
+    cps = list_checkpoints(hub) if cps is None else cps
+    explicit = read_stages(hub)
+    columns: dict[str, list[str]] = {}
+    for c in cps:
+        columns.setdefault(stage_of(hub, c.slug, explicit), []).append(c.slug)
+    return [{"stage": st, "members": members} for st, members in columns.items()]
+
+
+def next_at(hub: Path, stage: str) -> str:
+    """The name for one more checkpoint at a stage: the stage's own name if
+    nothing is there yet, else the next free number — design, design-2, …"""
+    st = slugify(stage)
+    taken = {c.slug for c in list_checkpoints(hub)}
+    members = next((col["members"] for col in stages(hub) if col["stage"] == st), [])
+    if not members and st not in taken:
+        return st
+    n = 2
+    while f"{st}-{n}" in taken:
+        n += 1
+    return f"{st}-{n}"

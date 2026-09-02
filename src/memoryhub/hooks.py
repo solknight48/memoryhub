@@ -83,16 +83,19 @@ def _has_mh_hook(entries: list) -> bool:
     )
 
 
-def install(path: Path) -> list[str]:
+def install(path: Path, budget: int | None = None) -> list[str]:
     """Add mh's hook entries to a settings file; returns the events added.
     Idempotent — an event that already carries an `mh hook` command is left
-    exactly as it is."""
+    exactly as it is. `budget` sizes the pack SessionStart injects."""
     data = _load_settings(path)
     hooks_cfg = data.setdefault("hooks", {})
     if not isinstance(hooks_cfg, dict):
         raise MhError(f"'hooks' in {path} is not an object; refusing to rewrite it")
     added = []
-    for event, cmd in HOOK_COMMANDS.items():
+    commands = dict(HOOK_COMMANDS)
+    if budget is not None:
+        commands["SessionStart"] += f" --budget {budget}"
+    for event, cmd in commands.items():
         entries = hooks_cfg.setdefault(event, [])
         if not isinstance(entries, list):
             raise MhError(f"'hooks.{event}' in {path} is not a list; refusing to rewrite it")

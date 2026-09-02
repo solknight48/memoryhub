@@ -172,6 +172,19 @@ def test_hook_install_writes_project_local_settings(mh, hub_project):
     assert events["PreCompact"][0]["hooks"][0]["command"] == "mh hook save"
 
 
+def test_hook_install_budget_sizes_the_injected_pack(mh, hub_project):
+    p = mh("hook", "install", "--budget", "8000", cwd=hub_project, check=0)
+    assert "injects up to ~8000 tokens" in p.stdout
+    data = json.loads(_settings(hub_project).read_text())
+    assert data["hooks"]["SessionStart"][0]["hooks"][0]["command"] == "mh hook load --budget 8000"
+    assert data["hooks"]["SessionEnd"][0]["hooks"][0]["command"] == "mh hook save"
+    # still mh's hook to the remover
+    mh("hook", "install", "--remove", cwd=hub_project, check=0)
+    assert "hooks" not in json.loads(_settings(hub_project).read_text()) or not json.loads(
+        _settings(hub_project).read_text()
+    )["hooks"].get("SessionStart")
+
+
 def test_hook_install_is_idempotent(mh, hub_project):
     mh("hook", "install", cwd=hub_project, check=0)
     p = mh("hook", "install", cwd=hub_project, check=0)

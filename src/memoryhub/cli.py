@@ -20,6 +20,7 @@ from . import live as livemod
 from . import load as loadmod
 from . import relay as relaymod
 from . import save as savemod
+from . import templates as tmpl
 from .hub import MhError
 
 app = typer.Typer(
@@ -100,14 +101,25 @@ def init(
     claude: bool = typer.Option(
         False, "--claude", help="Append the Memory section to the project CLAUDE.md."
     ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        help="Stage template for checkpoint names (see 'mh template --list').",
+    ),
 ):
     """Create a hub for this project (or the global hub)."""
+    if template is not None:
+        tmpl.get(template)  # an unknown name fails before anything is created
     res = hubmod.init_hub(Path.cwd(), global_=global_)
     _announce(res.hub)
     if res.created:
         print(f"initialized hub at {res.hub}")
     else:
         print(f"hub already initialized at {res.hub}")
+    if template is not None:
+        rec = tmpl.use(res.hub, template)
+        print(f"template: {rec['name']} — " + " → ".join(rec["stages"]))
+        print("  'mh checkpoint' with no name creates the next stage")
     if res.shadowed:
         print(
             f"note: this hub shadows {res.shadowed} for files under {res.root}",
@@ -129,17 +141,88 @@ def init(
 @app.command()
 @guard
 def checkpoint(
-    name: str = typer.Argument(..., help="Name for the new checkpoint."),
+    name: str | None = typer.Argument(
+        None, help="Name for the new checkpoint; omitted, the template's next stage."
+    ),
+    at: str | None = typer.Option(
+        None,
+        "--at",
+        help="Stage (timeline column) to put it at; alone, names it design-2, design-3, …",
+    ),
     json_: bool = JSON_OPT,
 ):
     """Create a new checkpoint (sub-hub) and make it current."""
     hub = _hub()
     _announce(hub)
-    c = ck.create(hub, name)
+    if name is None and at is not None:
+        name = ck.next_at(hub, at)
+    elif name is None:
+        name = tmpl.next_name(hub)
+    c = ck.create(hub, name, stage=at)
+    prog = tmpl.progress(hub)
     if json_:
-        _emit_json({"checkpoint": c.slug, "created": c.created, "path": str(c.path)})
-    else:
-        print(f"checkpoint '{c.slug}' created (current)")
+        _emit_json(
+            {
+                "checkpoint": c.slug,
+                "created": c.created,
+                "path": str(c.path),
+                "template": prog and {k: prog[k] for k in ("name", "done", "total", "next")},
+            }
+        )
+        return
+    column = ck.stage_of(hub, c.slug)
+    members = next((col["members"] for col in ck.stages(hub) if col["stage"] == column), [])
+    others = ", ".join(m for m in members if m != c.slug)
+    where = f" — at {column}, with {others}" if others else ""
+    print(f"checkpoint '{c.slug}' created (current){where}")
+    if prog and any(st["slug"] == column for st in prog["stages"]):
+        stage = next(i for i, st in enumerate(prog["stages"], 1) if st["slug"] == column)
+        ahead = f"next: {prog['next']}" if prog["next"] else "the last stage"
+        print(f"  stage {stage} of {prog['total']} in {prog['name']} — {ahead}")
+
+
+@app.command()
+@guard
+def template(
+    name: str | None = typer.Argument(
+        None, help="Template to use for this hub's checkpoint names."
+    ),
+    list_: bool = typer.Option(False, "--list", help="Show the built-in templates."),
+    clear: bool = typer.Option(False, "--clear", help="Stop using a template."),
+    json_: bool = JSON_OPT,
+):
+    """Stage template: default checkpoint names, created in order by 'mh checkpoint'."""
+    if list_:
+        if json_:
+            _emit_json(tmpl.catalogue())
+            return
+        for t in tmpl.catalogue():
+            print(f"{t['name']:10} {t['title']}")
+            for i, st in enumerate(t["stages"], 1):
+                print(f"  {i:2}. {st['name']} — {st['about']}")
+        print("\nmh template <name> uses one; mh checkpoint (no name) then creates its stages")
+        return
+    hub = _hub()
+    _announce(hub)
+    if clear:
+        was = tmpl.clear(hub)
+        print("template cleared" if was else "no template was set")
+        return
+    if name is not None:
+        tmpl.use(hub, name)
+    prog = tmpl.progress(hub)
+    if json_:
+        _emit_json(prog)
+        return
+    if prog is None:
+        print("no template — 'mh template --list' shows them, 'mh template <name>' uses one")
+        return
+    print(f"template: {prog['name']} — {prog['done']} of {prog['total']} stages created")
+    for i, st in enumerate(prog["stages"], 1):
+        mark = "✓" if st["exists"] else ("→" if st["name"] == prog["next"] else " ")
+        print(f"  {mark} {i:2}. {st['name']}")
+    if prog["next"]:
+        print(f"'mh checkpoint' creates {prog['next']} next")
 
 
 def _resolve_session(hub: Path, session_id, transcript):
@@ -655,6 +738,49 @@ def load(
         sys.stdout.write(result.text)
 
 
+@app.command()
+@guard
+def trace(
+    ref: str = typer.Argument(..., metavar="CKPT/SESSION", help="Saved session (prefix ok)."),
+    json_: bool = JSON_OPT,
+):
+    """Find the original transcript a saved session was purified from.
+
+    The link is the session id recorded in the saved file, resolved against the
+    transcripts on this machine now — nothing machine-specific is stored in the
+    hub. Prints the transcript's path when it is still here."""
+    hub = _hub()
+    ck_ref, file_ref = _split_session_ref(
+        ref, "trace needs a session: mh trace <checkpoint>/<session>"
+    )
+    c, session = curate.resolve_session(hub, ck_ref, file_ref)
+    parsed = curate.parse(session.read_text(encoding="utf-8", errors="replace"))
+    sid = parsed.session_id if parsed else None
+    original = livemod.find(hub, sid) if sid else None
+    if json_:
+        _emit_json(
+            {
+                "checkpoint": c.slug,
+                "file": session.name,
+                "session_id": sid,
+                "source": parsed.source if parsed else None,
+                "path": str(original.path) if original else None,
+                "agent": original.agent if original else None,
+                "on_this_machine": original is not None,
+            }
+        )
+        return
+    if not sid:
+        print(f"{c.slug}/{session.name} records no session id (an old save) — cannot trace")
+        return
+    print(f"{c.slug}/{session.name}  ←  session {sid}")
+    if original is not None:
+        print(f"  {original.agent}: {original.path}")
+    else:
+        src = f" ({parsed.source})" if parsed and parsed.source else ""
+        print(f"  original transcript{src} is not on this machine")
+
+
 def _newest_stamp(c: ck.Checkpoint) -> str | None:
     """The latest session stamp in a checkpoint, in filename form."""
     stamps = [p.name[:15] for p in c.sessions if ck.STAMP_RE.match(p.name[:15])]
@@ -673,12 +799,14 @@ def list_(json_: bool = JSON_OPT):
     cps = ck.list_checkpoints(hub)
     links = ck.read_links(hub)
     current = hubmod.read_current(hub)
+    placed = ck.read_stages(hub)
     if json_:
         _emit_json(
             [
                 {
                     "index": i + 1,
                     "checkpoint": c.slug,
+                    "stage": ck.stage_of(hub, c.slug, placed),
                     "created": c.created,
                     "sessions": len(c.sessions),
                     "last_save": _newest_stamp(c),
@@ -703,9 +831,11 @@ def list_(json_: bool = JSON_OPT):
         newest = _newest_stamp(c)
         last = _stamp_display(newest) if newest else "—"
         partners = ", ".join(ck.partners_of(c.slug, links))
+        column = ck.stage_of(hub, c.slug, placed)
+        at = f"  (at {column})" if column != c.slug else ""
         print(
             f"  {marker} {i + 1}  {created}  {c.slug.ljust(width)}  "
-            f"{str(len(c.sessions)).rjust(8)}  {last.ljust(16)}  {partners}"
+            f"{str(len(c.sessions)).rjust(8)}  {last.ljust(16)}  {partners}{at}"
         )
 
 
@@ -778,6 +908,7 @@ def status(json_: bool = JSON_OPT):
     from . import server
 
     ui_rec = server.running(hub)
+    prog = tmpl.progress(hub)
 
     if json_:
         _emit_json(
@@ -789,6 +920,7 @@ def status(json_: bool = JSON_OPT):
                 "sessions": total_sessions,
                 "links": len(links),
                 "loads_with": closure_slugs,
+                "template": prog and {k: prog[k] for k in ("name", "done", "total", "next")},
                 "last_save": newest,
                 "days_since_save": days,
                 "stale": bool(days is not None and days > 7),
@@ -812,6 +944,9 @@ def status(json_: bool = JSON_OPT):
     else:
         print("current: none (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
     print(f"checkpoints: {len(cps)} · sessions: {total_sessions} · links: {len(links)}")
+    if prog:
+        ahead = f"next: {prog['next']}" if prog["next"] else "all stages created"
+        print(f"template: {prog['name']} — {prog['done']} of {prog['total']} stages · {ahead}")
     if ui_rec:
         print(f"ui: {ui_rec['url']} (pid {ui_rec['pid']}, background — mh ui --stop ends it)")
     if newest:
@@ -1145,6 +1280,12 @@ def hook_install(
     remove: bool = typer.Option(
         False, "--remove", help="Uninstall mh's hooks from the chosen settings file."
     ),
+    budget: int | None = typer.Option(
+        None,
+        "--budget",
+        help=f"Token budget for the pack injected at session start "
+        f"(default {loadmod.DEFAULT_BUDGET}).",
+    ),
 ):
     """Wire mh into Claude Code hooks: load at SessionStart, save at SessionEnd and PreCompact."""
     if user:
@@ -1158,9 +1299,11 @@ def hook_install(
         else:
             print(f"no mh hooks in {path} — nothing to do")
         return
-    events = hooksmod.install(path)
+    events = hooksmod.install(path, budget)
     if events:
         print(f"installed mh hooks ({', '.join(events)}) -> {path}")
+        if budget is not None:
+            print(f"session start injects up to ~{budget} tokens of memory")
         print(
             "active from the next Claude Code session: memory injects itself at "
             "start, and saves run at session end and before compaction"

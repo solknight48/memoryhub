@@ -59,14 +59,16 @@ $ mh load                        # 两者的会话，按时间合并
 
 | 命令 | 作用 |
 |---|---|
-| `mh init [--global] [--claude]` | 创建中枢。 |
-| `mh checkpoint <name>` | 新建检查点，并设为当前。 |
+| `mh init [--global] [--claude] [--template T]` | 创建中枢。 |
+| `mh checkpoint [name] [--at STAGE]` | 新建检查点，并设为当前。不给名字：模板里的下一个阶段；只给 `--at`：同一阶段再来一个（`design-2`）。 |
+| `mh template [name] [--list] [--clear]` | 阶段模板——后面各检查点的默认名字。 |
 | `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | 提纯当前会话并存入检查点。 |
 | `mh save [CKPT] --compact --file MD` | 存入 agent 撰写的摘要，替代完整对话。 |
 | `mh import [--to CKPT] [--agent A]... [--dry-run]` | 回填本项目的历史会话（Claude Code、pi、Codex）。 |
 | `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | 热启动上下文包：所选检查点 + 链接闭包，按时间合并。 |
 | `mh link A B` / `mh unlink A B` | 让两个检查点一起加载 / 取消。 |
 | `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | 查看中枢内容。 |
+| `mh trace CKPT/SESSION` | 找回某个保存会话所提纯自的原始 transcript。 |
 | `mh rm CKPT[/SESSION] [-x N] [--force]` | 删除检查点、会话，或单独一轮对话。 |
 | `mh mv CKPT/SESSION CKPT` / `mh rename CKPT NAME` | 移动会话 / 重命名检查点。 |
 | `mh edit CKPT/SESSION -x N [--user T] [--agent T]` | 改写一轮对话的某一侧。 |
@@ -75,7 +77,7 @@ $ mh load                        # 两者的会话，按时间合并
 | `mh sync` | 对 `origin` 执行 `pull --rebase` + `push`，冲突自动中止。 |
 | `mh hubs [--prune]` | 列出所有已注册的中枢。 |
 | `mh ui [--port N] [--budget N\|none] [--read-only] [--detach] [--stop] [--session ID]` | 在浏览器里打开检查点地图并整理中枢。 |
-| `mh hook install [--user] [--remove]` | 通过 Claude Code hooks 自动 load/save。 |
+| `mh hook install [--user] [--remove] [--budget N]` | 通过 Claude Code hooks 自动 load/save。 |
 | `mh skill install` | 安装 Claude Code skill。 |
 
 ## 保存：提纯，或压缩
@@ -135,6 +137,12 @@ token 的上下文，而不用加载整个 `/mh` 工作流。
 同样的整理操作在终端里也有——`mh rm`、`mh mv`、`mh rename`、`mh edit`——agent
 不用浏览器也能按要求整理记忆。
 
+时间线下面还有一块**项目记忆**——Claude Code 为这个项目记下的笔记
+（`~/.claude/projects/<project>/memory/`），只读展示：每条笔记一张卡片，带类型、
+markdown 正文、它链接到的其它笔记（`[[name]]`，可点），以及在原始 transcript 还在
+本机时、在单独一页里打开它所来自的那次会话。这个文件夹不归 mh 所有，mh 从不写它，只是把它放在
+检查点旁边一起显示。
+
 地图下面是**当前正在进行的会话**：agent 此刻正在写的 transcript，一有增长就
 重新读取，所以你在终端里说的话过一两秒就出现在浏览器里。默认只展示最新的三轮，
 更早的一键展开，地图不会被一场长会话顶到看不见。这里是**不过滤**的：思考、正文、每一次工具调用，按 agent 真正
@@ -160,6 +168,13 @@ pane 不是猜的：`mh hook load` 在会话开始时记下它（tmux 会把 `TM
 回到同一个 pane 里的 agent mh 认得。打字回去目前仅限 Linux——mh 通过 `/proc` 确认 pane
 里还是那个 agent。
 
+输入框还是 CLI 输入的**投影**：消息以 `/` 开头时，会列出这个会话的 agent 自己的技能和
+命令——mh 从磁盘上读（`~/.claude/skills`、项目的 `.claude/skills`、`commands/`、已安装的
+插件；pi 的 `~/.pi/agent/skills`），再加几条值得从浏览器发的内置命令；`/model` 后面列出
+CLI 认的别名和这个会话用过的模型。↑↓ 选，⏎ 或 ⇥ 填入，补上参数，Ctrl+⏎ 发出——消息照常
+粘进会话，由 CLI 自己执行，所以页面不需要知道任何一条命令做什么，名单上没有的也照发。
+mh 没验证过的 agent（codex）不给名单，只说明一句。
+
 安全性：只监听回环地址，每个请求都要带启动时生成的一次性 token，并校验 `Host` 头；
 页面完全自包含，离线可用。**mh 绝不改写自己无法逐字节复现的文件**——先解析再重新渲染，
 对不上就标为只读。提纯后的对话经常引用 mh 自己的输出（讨论 MemoryHub 的会话正文里就有
@@ -182,11 +197,33 @@ imported 17 sessions -> history (claude 11, codex 1, pi 5)
 ## 值得了解的
 
 - **加载**：`mh load` 取当前检查点（或你指定的），沿链接扩展，在 `--budget` 内
-  从旧到新输出完整会话（默认约 6000 tokens，保留最新的一段连续后缀）。
+  从旧到新输出完整会话（默认 20000 tokens——约 200k 上下文的十分之一，三四个
+  典型会话——保留最新的一段连续后缀；SessionStart hook 的大小另由
+  `mh hook install --budget N` 指定）。
 - **token 估算认识中日韩文**：CJK 每字约 1 token，ASCII 约 4 字符 1 token——
   做预算足够准，且不引入分词器依赖。
 - **名字不限文种**：`mh checkpoint 数据管道` 和 `mh checkpoint backtest`
   一样是一等公民。
+- **同一阶段可以有多个检查点**：`design`、`design-2`、`design-3` 在时间线上叠在
+  同一个节点下——名字末尾带数字就是同一阶段的又一次尝试，`mh checkpoint --at design`
+  会替你编号。`mh checkpoint dollar-bars --at research` 把一个名字里看不出阶段的
+  检查点放到某个阶段（记在中枢的 `stages.toml` 里）。它们和别的检查点一样彼此独立——
+  要一起加载就 link——所以并行的尝试，或者一个 worktree 一个尝试，各有各的记忆，
+  又不会离开它们所属的阶段。
+- **阶段模板**：大多数项目走的是同一副骨架——计划、设计、开发、测试、部署、
+  监控——各领域只是每一步叫法不同。`mh template --list` 列出十套（quant、
+  frontend、backend、sdlc、mobile、devops、data、ml、sprint、hotfix）；
+  `mh template quant`（或 `mh init --template quant`）把它记进中枢，之后
+  `mh checkpoint` 不给名字就创建下一个阶段，`mh status` 报告项目走到了哪一步，
+  地图把还没到的阶段画成虚线节点，点一下就建。不会预先建好所有阶段，时间线上
+  的日期都是真实的。中枢里的 `template.toml` 存着这份阶段列表的副本：改它，
+  项目就有了自己的顺序。
+- **可回溯到源头**：保存下来的会话记着它提纯自哪个 transcript 的 id。
+  `mh trace <ckpt>/<session>` 把它解析成本机上的原始 `.jsonl`（不在本机就直说）；
+  在地图里，保存会话的面板上有 **open original ↗**，点开会在**单独的一页**里显示完整
+  未过滤的 transcript——思考、工具调用、图片都在（`?view=<id>`：只有这一个 transcript，
+  一直钉住），提纯后的会话和它的源头可以并排看。中枢里不存任何跟机器绑定的东西，
+  id 本身就是这条链接。
 - **每一次变更都是一次 git 提交**。撤销、重命名、删除、合并都可以直接用
   `git -C .memoryhub ...`——中枢就是个普通仓库。
 - **是 exclude 不是 ignore**：`mh init` 写项目里的 `.git/info/exclude`，
