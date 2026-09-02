@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tomllib
@@ -119,24 +120,11 @@ class InitResult:
 
 
 def _write_exclude(root: Path) -> None:
-    try:
-        common = git.run(
-            root, "rev-parse", "--path-format=absolute", "--git-common-dir"
-        ).strip()
-    except git.GitError:
-        return
-    exclude = Path(common) / "info" / "exclude"
-    exclude.parent.mkdir(parents=True, exist_ok=True)
-    text = exclude.read_text() if exclude.is_file() else ""
-    if EXCLUDE_LINE in text.splitlines():
-        return
-    if text and not text.endswith("\n"):
-        text += "\n"
-    exclude.write_text(text + EXCLUDE_LINE + "\n")
+    git.exclude(root, EXCLUDE_LINE)
 
 
 def _register(hub: Path) -> None:
-    write_registry(read_registry() + [str(hub)])
+    write_registry([*read_registry(), str(hub)])
 
 
 def init_hub(cwd: Path, global_: bool = False) -> InitResult:
@@ -153,10 +141,8 @@ def init_hub(cwd: Path, global_: bool = False) -> InitResult:
         return InitResult(hub, root, False, None)
 
     shadowed = None
-    try:
+    with contextlib.suppress(MhError):
         shadowed = discover(root.parent)
-    except MhError:
-        pass
 
     hub.mkdir(parents=True, exist_ok=True)
     (hub / "checkpoints").mkdir(exist_ok=True)

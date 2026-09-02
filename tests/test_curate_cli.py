@@ -103,7 +103,9 @@ def test_edit_rejects_conflicting_and_missing_input(mh, ws, hub_project, tmp_pat
     path = _seed(mh, ws, hub_project, [("q1", "a1")])
     f = tmp_path / "x.md"
     f.write_text("x")
-    p = mh("edit", f"alpha/{path.name}", "-x", "1", "--agent", "a", "--agent-file", f, cwd=hub_project)
+    p = mh(
+        "edit", f"alpha/{path.name}", "-x", "1", "--agent", "a", "--agent-file", f, cwd=hub_project
+    )
     assert p.returncode == 1 and "not both" in p.stderr
     p = mh("edit", f"alpha/{path.name}", "-x", "1", cwd=hub_project)
     assert p.returncode == 1 and "nothing to change" in p.stderr

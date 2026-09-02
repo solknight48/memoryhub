@@ -12,9 +12,7 @@ from memoryhub.hub import MhError
 
 
 def _config(page: bytes) -> dict:
-    m = re.search(
-        rb'<script id="mh-config" type="application/json">(.*?)</script>', page
-    )
+    m = re.search(rb'<script id="mh-config" type="application/json">(.*?)</script>', page)
     assert m, "no config block in the served page"
     return json.loads(m.group(1))
 
@@ -64,8 +62,6 @@ def test_missing_config_marker_fails_loudly(monkeypatch):
         def read_bytes(self):
             return b"<html>no marker here</html>"
 
-    monkeypatch.setattr(
-        type(files("memoryhub")), "joinpath", lambda self, *a, **k: FakeResource()
-    )
+    monkeypatch.setattr(type(files("memoryhub")), "joinpath", lambda self, *a, **k: FakeResource())
     with pytest.raises(MhError, match="config marker"):
         server._page(6000, False, Path("/x"))

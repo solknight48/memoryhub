@@ -15,8 +15,10 @@ import { readFileSync } from "node:fs";
 
 const page = readFileSync(process.argv[2], "utf8");
 
-// Two regions: the markdown renderer, then the avatar/model helpers. Both are
-// pure given a document, so they run outside a browser unchanged.
+// Three regions: the markdown renderer, the avatar/model helpers, and the live
+// session's card builder. All are pure given a document, so they run outside a
+// browser unchanged — the card builder needs the two flags its call site would
+// have set, stubbed below.
 function slice(from, to) {
   const a = page.indexOf(from), b = page.indexOf(to);
   if (a < 0 || b < 0 || b < a) {
@@ -25,7 +27,11 @@ function slice(from, to) {
   return page.slice(a, b);
 }
 const src = slice("function el(tag", "function tip(evt") +
-            slice("const AVATARS", "function niceStamp");
+            slice("const AVATARS", "function niceStamp") +
+            // its two free names: --read-only hides the buttons, and the
+            // click handler is the server call, tested from Python instead
+            "const RO = false;\nconst liveAct = () => {};\nconst LIVE_OPEN = new Set();\n" +
+            slice("function liveCard(", "function liveEditCard(");
 
 class Node {
   constructor(tag) {
@@ -71,13 +77,15 @@ const document = {
 
 const fns = new Function(
   "document",
-  src + "\nreturn { md, modelLabel, modelChip, avatarColor };"
+  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang };"
 )(document);
 
 const request = JSON.parse(readFileSync(0, "utf8"));
 const out = {};
 for (const [name, args] of Object.entries(request)) {
   if (!fns[name]) throw new Error(`no such function in the page: ${name}`);
-  out[name] = args.map((a) => serialise(fns[name](a)));
+  // an array argument is a call's argument list, so multi-argument functions
+  // (codeLang(info, text)) are reachable too
+  out[name] = args.map((a) => serialise(fns[name](...(Array.isArray(a) ? a : [a]))));
 }
 process.stdout.write(JSON.stringify(out));

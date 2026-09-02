@@ -10,7 +10,6 @@ from . import checkpoint as ck
 from . import git
 from .hub import MhError, read_current
 
-
 DEFAULT_BUDGET = 6000  # one definition; the CLI, the API and the page share it
 
 # CJK scripts run ~1 token per character where ASCII prose runs ~4 characters
@@ -59,9 +58,7 @@ def build(
     else:
         current = read_current(hub)
         if not current:
-            raise MhError(
-                "no current checkpoint (run 'mh checkpoint <name>' or 'mh goto <ckpt>')"
-            )
+            raise MhError("no current checkpoint (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
         base = [ck.resolve(hub, current)]
 
     slugs = {c.slug for c in base}
@@ -72,9 +69,7 @@ def build(
         slugs = full
 
     selected = [c for c in all_cps if c.slug in slugs]
-    files = sorted(
-        ((f, c.slug) for c in selected for f in c.sessions), key=lambda t: t[0].name
-    )
+    files = sorted(((f, c.slug) for c in selected for f in c.sessions), key=lambda t: t[0].name)
 
     blocks = []
     for path, slug in files:
@@ -127,8 +122,7 @@ def build(
     names = " + ".join(sorted(slugs))
     linked = " (linked)" if expanded else ""
     header = (
-        f"<!-- mh | loaded: {names}{linked} | "
-        f"{len(kept)} of {len(blocks)} sessions | @ {sha} -->\n"
+        f"<!-- mh | loaded: {names}{linked} | {len(kept)} of {len(blocks)} sessions | @ {sha} -->\n"
     )
     parts = [header]
     for block in kept:
@@ -145,10 +139,7 @@ def build(
         text="".join(parts),
         loaded=sorted(slugs),
         expanded=expanded,
-        included=[
-            {k: b[k] for k in ("id", "checkpoint", "file", "tokens", "body")}
-            for b in kept
-        ],
+        included=[{k: b[k] for k in ("id", "checkpoint", "file", "tokens", "body")} for b in kept],
         omitted=omitted,
         budget=budget,
         used=used,

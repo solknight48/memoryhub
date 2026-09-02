@@ -13,6 +13,7 @@ def test_token_estimate_ascii_and_cjk():
     mixed = "abcd" + "中文"
     assert estimate_tokens(mixed) == 3  # 4 ascii chars -> 1, 2 CJK -> 2
 
+
 SIDS = {
     "alpha1": "aaaa1111-0000-4000-8000-000000000001",
     "alpha2": "aaaa2222-0000-4000-8000-000000000002",
@@ -146,9 +147,7 @@ def test_load_json_and_determinism(mh, ws, hub_project):
 def test_load_golden_output(mh, ws, hub_project):
     sid = "e5f6a7b8-5555-4555-8555-555555555555"
     mh("checkpoint", "solo", cwd=hub_project, check=0)
-    tr = write_transcript(
-        ws["home"], hub_project, sid, make_records([("hello", "world")])
-    )
+    tr = write_transcript(ws["home"], hub_project, sid, make_records([("hello", "world")]))
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     out = mh("load", cwd=hub_project, check=0).stdout
     normalized = re.sub(r"@ [0-9a-f]+", "@ SHA", out)

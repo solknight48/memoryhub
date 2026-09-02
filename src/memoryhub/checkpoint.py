@@ -81,9 +81,7 @@ def resolve(hub: Path, ref: str) -> Checkpoint:
     if len(prefixed) == 1:
         return prefixed[0]
     if len(prefixed) > 1:
-        raise MhError(
-            f"ambiguous checkpoint '{ref}': " + ", ".join(c.slug for c in prefixed)
-        )
+        raise MhError(f"ambiguous checkpoint '{ref}': " + ", ".join(c.slug for c in prefixed))
     if ref.isdigit():
         idx = int(ref)
         if 1 <= idx <= len(cps):
@@ -125,12 +123,6 @@ def write_session(ckpt: Checkpoint, body: str, key: str, stamp: str) -> str:
     return fname
 
 
-def save_session(hub: Path, ckpt: Checkpoint, body: str, key: str, stamp: str) -> str:
-    fname = write_session(ckpt, body, key, stamp)
-    git.auto_commit(hub, f"save: {fname} -> {ckpt.slug}")
-    return fname
-
-
 def session_key(filename: str) -> str | None:
     """The identity key inside `<stamp>_<key>.md`, or None if the name does not
     follow the convention. Sole decoder of the session filename grammar."""
@@ -142,15 +134,21 @@ def session_key(filename: str) -> str | None:
     return None
 
 
+def find_by_key(hub: Path, key: str) -> tuple[Checkpoint | None, Path | None]:
+    """(checkpoint, path) of the session holding this identity key anywhere in
+    the hub, or (None, None). One session lives in exactly one checkpoint, so
+    re-saving it updates it where it is instead of duplicating it."""
+    for c in list_checkpoints(hub):
+        for p in c.sessions:
+            if session_key(p.name) == key:
+                return c, p
+    return None, None
+
+
 def existing_keys(hub: Path) -> set[str]:
     """Session identity keys already present anywhere in the hub (for import
     dedup: a session saved once is never imported again)."""
-    return {
-        key
-        for c in list_checkpoints(hub)
-        for p in c.sessions
-        if (key := session_key(p.name))
-    }
+    return {key for c in list_checkpoints(hub) for p in c.sessions if (key := session_key(p.name))}
 
 
 # --- links -------------------------------------------------------------------
@@ -187,7 +185,7 @@ def add_link(hub: Path, ref_a: str, ref_b: str) -> tuple[str, str] | None:
     links = read_links(hub)
     if edge in {(min(x, y), max(x, y)) for x, y in links}:
         return None
-    write_links(hub, links + [edge])
+    write_links(hub, [*links, edge])
     git.auto_commit(hub, f"link: {edge[0]} -- {edge[1]}")
     return edge
 

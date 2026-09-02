@@ -32,38 +32,31 @@ def test_compact_stores_the_agent_summary(mh, ws, hub_project, tmp_path):
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "summary.md"
     summary.write_text("## Summary\n\n1. Primary Request: ship the thing.\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
-    body, path = _only_body(hub_project)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
+    body, _ = _only_body(hub_project)
     assert "# Session Context — Compacted" in body
     assert "1. Primary Request: ship the thing." in body
     assert "2 exchanges compacted" in body
     assert "## User 1" not in body  # the dialog itself is not stored
 
 
-def test_compact_lands_under_the_session_identity_not_the_filename(
-    mh, ws, hub_project, tmp_path
-):
+def test_compact_lands_under_the_session_identity_not_the_filename(mh, ws, hub_project, tmp_path):
     """So a compacted save and a purified save of the same session are one
     file, not two — `--file` alone keys off the filename, `--compact` must not."""
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "some-random-name.md"
     summary.write_text("summary text\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     _, path = _only_body(hub_project)
     assert path.name.endswith(f"_{SID[:8]}.md")
     assert "some-random-name" not in path.name
 
 
-def test_a_later_purified_save_replaces_the_compacted_one(
-    mh, ws, hub_project, tmp_path
-):
+def test_a_later_purified_save_replaces_the_compacted_one(mh, ws, hub_project, tmp_path):
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "s.md"
     summary.write_text("summary text\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     c = ck.list_checkpoints(_hub(hub_project))[0]
     assert len(c.sessions) == 1  # one representation per session, never both
@@ -110,8 +103,7 @@ def test_compact_with_an_empty_summary_errors(mh, ws, hub_project, tmp_path):
 
 def test_compact_with_a_missing_file_errors(mh, ws, hub_project, tmp_path):
     tr = _seed(mh, ws, hub_project)
-    p = mh("save", "--compact", "--file", tmp_path / "nope.md", "--transcript", tr,
-           cwd=hub_project)
+    p = mh("save", "--compact", "--file", tmp_path / "nope.md", "--transcript", tr, cwd=hub_project)
     assert p.returncode == 1
     assert "file not found" in p.stderr
 
@@ -119,14 +111,11 @@ def test_compact_with_a_missing_file_errors(mh, ws, hub_project, tmp_path):
 # --- how the rest of mh sees a compacted session -----------------------------
 
 
-def test_curate_recognises_a_compacted_session_as_read_only(
-    mh, ws, hub_project, tmp_path
-):
+def test_curate_recognises_a_compacted_session_as_read_only(mh, ws, hub_project, tmp_path):
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "s.md"
     summary.write_text("## Summary\n\nstuff happened.\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     body, _ = _only_body(hub_project)
     parsed = curate.parse(body)
     assert parsed is not None, "a compacted session must still be recognised as ours"
@@ -135,16 +124,13 @@ def test_curate_recognises_a_compacted_session_as_read_only(
     assert parsed.session_id == SID
 
 
-def test_a_summary_quoting_dialog_headings_stays_compacted(
-    mh, ws, hub_project, tmp_path
-):
+def test_a_summary_quoting_dialog_headings_stays_compacted(mh, ws, hub_project, tmp_path):
     """Summaries quote the conversation, so they contain `## User 1` lines. That
     must not make the file parse as dialog."""
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "s.md"
     summary.write_text("## Summary\n\nThe user asked:\n\n## User 1\n\nquoted turn\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     body, _ = _only_body(hub_project)
     parsed = curate.parse(body)
     assert parsed.compacted and parsed.turns == []
@@ -154,8 +140,7 @@ def test_compacted_sessions_load_like_any_other(mh, ws, hub_project, tmp_path):
     tr = _seed(mh, ws, hub_project)
     summary = tmp_path / "s.md"
     summary.write_text("## Summary\n\nthe compacted gist.\n")
-    mh("save", "--compact", "--file", summary, "--transcript", tr,
-       cwd=hub_project, check=0)
+    mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     out = mh("load", cwd=hub_project, check=0).stdout
     assert "the compacted gist." in out
     assert "Compacted" in out

@@ -74,7 +74,7 @@ $ mh load                        # 两者的会话，按时间合并
 | `mh status` / `mh log` | 位置与统计 / 中枢的 git 日志。 |
 | `mh sync` | 对 `origin` 执行 `pull --rebase` + `push`，冲突自动中止。 |
 | `mh hubs [--prune]` | 列出所有已注册的中枢。 |
-| `mh ui [--port N] [--budget N\|none] [--read-only]` | 在浏览器里打开检查点地图并整理中枢。 |
+| `mh ui [--port N] [--budget N\|none] [--read-only] [--detach] [--stop] [--session ID]` | 在浏览器里打开检查点地图并整理中枢。 |
 | `mh hook install [--user] [--remove]` | 通过 Claude Code hooks 自动 load/save。 |
 | `mh skill install` | 安装 Claude Code skill。 |
 
@@ -83,10 +83,13 @@ $ mh load                        # 两者的会话，按时间合并
 `mh save` 是一趟确定性处理，不调用 LLM、不联网：找到本次会话的 transcript，
 按顺序把每个用户轮次与其后的助手文本配对，剥掉一切不是对话的内容（思考块、工具调用与
 结果、子 agent 往来、`<system-reminder>`、框架包装消息、被打断的轮次），丢弃触发这次
-保存的末尾问句，然后写入 `<结束时间>_<会话 key>.md` 并提交。
+保存的末尾问句，然后写入 `<结束时间>_<会话 key>.md` 并提交。agent 回答过的斜杠命令——
+`/mh load`——按你敲的原样保留；没人回答的（`/clear`、`/model`）是框架噪音，直接丢掉。
 
 时间戳取会话的**结束**时间，所以按时间合并加载时顺序反映工作真正发生的时刻。
-每个检查点中每个会话只有一个文件：重新保存是替换，不会重复。
+一个会话只存在于一个检查点：重新保存是替换，不会重复——即使当前指针已经移走，
+不带目标的 `mh save` 仍在原处更新，`mh save --to <ckpt>` 则把它搬过去。hook 和
+地图上的保存按钮遵循同一条规则。
 
 `mh save --compact --file <md>` 则存入一份摘要，替代完整对话。**mh 自己不做摘要**——
 它没有模型也不联网，撰写摘要的是驱动会话的 agent，skill 里带了这套流程，所以你只要说
@@ -118,12 +121,44 @@ $ mh ui
 mh ui: http://127.0.0.1:7777/?t=<每次启动新生成的 token>
 ```
 
+`mh ui --detach` 把服务放到后台并打印 URL——在 agent 会话里 `/mh ui` 跑的就是它，
+实时面板会钉在发起请求的那个会话上（`$CLAUDE_CODE_SESSION_ID`）。钉住只在会话还活着时
+有效：静默十分钟且项目里有更新的 transcript，页面就转而跟随最新的，并说明原因。再跑
+一次只会打印已在运行的服务的 URL；`mh ui --stop` 结束它；`mh status` 会显示它。
+`mh skill install` 还会装上 **`/mh-ui`**——只做这一件事的一段话 skill，只占约 150 个
+token 的上下文，而不用加载整个 `/mh` 工作流。
+
 一条检查点时间线：节点大小对应会话数，链接用弧线相连，当前指针带外圈高亮，并按 token
 预算标出下一次 `mh load` 实际会包含哪些会话。点进去可以**删除或改写单独一轮对话**、
 删除或移动会话，以及重命名、删除、链接检查点。每次改动都是中枢里的一次提交，
 `git -C .memoryhub revert` 就是撤销。`--read-only` 只看不改，编辑入口全部隐藏。
 同样的整理操作在终端里也有——`mh rm`、`mh mv`、`mh rename`、`mh edit`——agent
 不用浏览器也能按要求整理记忆。
+
+地图下面是**当前正在进行的会话**：agent 此刻正在写的 transcript，一有增长就
+重新读取，所以你在终端里说的话过一两秒就出现在浏览器里。默认只展示最新的三轮，
+更早的一键展开，地图不会被一场长会话顶到看不见。这里是**不过滤**的：思考、正文、每一次工具调用，按 agent 真正
+产生的顺序排开，同一次回复里发出的多个工具调用会收在一条竖线下面，标成它们真实运行的
+并行批次，子 agent 的输出也标出来是它的——因为看一场正在发生的会话时，工具调用
+就是会话本身。图片也会显示：你贴进会话的图，或 agent 读过的截图，都出现在那一轮下面——
+由 mh 直接从 transcript 或文件里提供，绝不复制进中枢。（**存下来**的仍然是提纯后的对话；
+面板上的 `full output` 可以关掉原始流。）
+会话还在跑，就可以整理它——丢掉某一轮、改写某个回答、再把它们恢复回来。这些决定存成中枢旁边的一份草稿
+（`.memoryhub/drafts/`，不追踪，不进日志），并且**每一次**保存这个会话时都会应用：
+`mh save`、SessionEnd/PreCompact hook、面板上的保存按钮都一样。所以会话中途整理掉的
+内容不会在最终保存时又回来，而整理之后新产生的对话照样会进去。agent 正在回答的那一问
+会显示出来，但不会被保存——`mh save` 一直就是这么丢掉它的。
+
+还可以**打字回去**。输入框在面板底部，会话在视野内时固定在窗口下沿；它不会伪造
+回答——mh 没有模型。它把你写的内容粘贴进
+这个会话所在的 tmux pane，就跟你自己在终端里敲一样，agent 的回答照常从 transcript 回来。
+pane 不是猜的：`mh hook load` 在会话开始时记下它（tmux 会把 `TMUX_PANE` 传进 hook），
+每次发送前都会重新确认 pane 还在、里面那个 agent 进程还活着——会话已经退出的 pane 一律
+拒绝，绝不往接管它的东西里粘。不在 tmux 里的会话会直说：先 `tmux new -s mh` 开一个，再在里面运行 `claude`，
+输入框就亮了。tmux 要作为 shell 启动，不要写成 `tmux new -s mh claude`——那样 claude
+一退出 pane 就关了，整个 tmux 会话也跟着没了；shell pane 比 `claude -c` 重启活得久，
+回到同一个 pane 里的 agent mh 认得。打字回去目前仅限 Linux——mh 通过 `/proc` 确认 pane
+里还是那个 agent。
 
 安全性：只监听回环地址，每个请求都要带启动时生成的一次性 token，并校验 `Host` 头；
 页面完全自包含，离线可用。**mh 绝不改写自己无法逐字节复现的文件**——先解析再重新渲染，
@@ -166,8 +201,12 @@ imported 17 sessions -> history (claude 11, codex 1, pi 5)
 git clone https://github.com/solknight48/memoryhub
 cd memoryhub
 uv run pytest                  # 完整 E2E 套件，在隔离的 HOME 中以子进程跑 CLI
+uv run ruff check && uv run ruff format --check   # CI 跑的就是这两条
 uv tool install --force -e .   # 让装好的 mh 就是你在改的代码
 ```
+
+改动必须守住的不变量见 [CONTRIBUTING.md](CONTRIBUTING.md)；什么时候改了什么见
+[CHANGELOG.md](CHANGELOG.md)。
 
 `purify.py` 内联自 `purify-context` skill，有一致性测试把提取语义钉在它上面。
 `curate.py` 是唯一解析会话 markdown 的代码，绝不能改写"解析 → 重新渲染"无法逐字节

@@ -65,6 +65,15 @@ checkpoints load together, their sessions merged in time order.
   `mh load`, SessionEnd and PreCompact run the save. Run it only on approval —
   it edits Claude Code settings.
 
+## Web UI
+- `/mh ui`, "open the map", "start the web UI" ("打开地图", "起 webui"): run
+  exactly one command, `mh ui --detach`, and reply with the URL it prints —
+  one line, nothing else. No checks before it and no diagnostics after: mh
+  picks a free port by itself, prints the URL of a server that is already
+  running instead of starting another, and follows THIS session's live panel
+  (it reads `CLAUDE_CODE_SESSION_ID`). Never a bare `mh ui` (it blocks the
+  shell). `mh ui --stop` ends the server — only on the user's request.
+
 ## Taking over a project with existing history
 When the user asks to take over a project, import old sessions, or backfill
 history: run `mh import --dry-run` first and show the summary, then on approval

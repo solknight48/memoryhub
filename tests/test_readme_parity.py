@@ -30,7 +30,9 @@ def _headings(text: str, level: str) -> int:
     for line in text.splitlines():
         token = re.match(r"^\s*(```|~~~)", line)
         if token:
-            fence = token.group(1) if fence is None else (None if fence == token.group(1) else fence)
+            fence = (
+                token.group(1) if fence is None else (None if fence == token.group(1) else fence)
+            )
             continue
         if fence is None and line.startswith(level + " "):
             count += 1
@@ -44,13 +46,15 @@ def _command_column(text: str) -> list[str]:
 
 
 def _documented_commands(text: str) -> set[str]:
-    return {m.group(1) for row in _command_column(text)
-            for m in re.finditer(r"`mh ([a-z][\w-]*)", row)}
+    return {
+        m.group(1) for row in _command_column(text) for m in re.finditer(r"`mh ([a-z][\w-]*)", row)
+    }
 
 
 def _cli_commands() -> set[str]:
-    names = {c.name or c.callback.__name__.rstrip("_").replace("_", "-")
-             for c in app.registered_commands}
+    names = {
+        c.name or c.callback.__name__.rstrip("_").replace("_", "-") for c in app.registered_commands
+    }
     return names | {g.name for g in app.registered_groups}
 
 

@@ -17,3 +17,6 @@ dist/
 
 # MemoryHub's own context hub — a separate git repo, synced via `mh sync`
 .memoryhub/
+
+# Personal Claude Code settings (mh hook install writes here)
+.claude/settings.local.json

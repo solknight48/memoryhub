@@ -58,6 +58,26 @@ def passthrough(target: Path, *args: str) -> int:
     return proc.returncode
 
 
+def exclude(target: Path, line: str) -> None:
+    """Add a line to a repo's local `.git/info/exclude`. Untracked by
+    definition, so local-only state stays out of the journal — and out of any
+    clone. Silent when target is not a repo: an ignore rule is never the point
+    of the operation that asks for it.
+    """
+    try:
+        common = run(target, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    except GitError:
+        return
+    path = Path(common) / "info" / "exclude"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text() if path.is_file() else ""
+    if line in text.splitlines():
+        return
+    if text and not text.endswith("\n"):
+        text += "\n"
+    path.write_text(text + line + "\n")
+
+
 def is_dirty(target: Path) -> bool:
     return bool(run(target, "status", "--porcelain").strip())
 

@@ -163,17 +163,26 @@ def test_delete_session(mh, ws, hub_project):
 def test_move_session_between_checkpoints(mh, ws, hub_project):
     hub = _seed(mh, ws, hub_project, [("q", "a")])
     mh("checkpoint", "beta", cwd=hub_project, check=0)
-    c, path = _only_session(hub_project, "alpha")
+    _, path = _only_session(hub_project, "alpha")
     curate.move_session(hub, "alpha", path.name, "beta")
     assert ck.resolve(hub, "alpha").sessions == []
     assert [p.name for p in ck.resolve(hub, "beta").sessions] == [path.name]
 
 
+def _copy_into(hub, path, slug, name=None):
+    """A duplicate that got there by hand (cp, a merge) — mh itself never
+    writes a session into two checkpoints, so the clash mv guards against has
+    to be planted."""
+    dest = ck.resolve(hub, slug).path / (name or path.name)
+    dest.write_bytes(path.read_bytes())
+    return dest
+
+
 def test_move_refuses_the_same_filename(mh, ws, hub_project):
     hub = _seed(mh, ws, hub_project, [("q", "a")])
     mh("checkpoint", "beta", cwd=hub_project, check=0)
-    mh("save", "--to", "beta", "--session-id", SID, cwd=hub_project, check=0)
-    c, path = _only_session(hub_project, "alpha")
+    _, path = _only_session(hub_project, "alpha")
+    _copy_into(hub, path, "beta")
     with pytest.raises(Exception) as e:
         curate.move_session(hub, "alpha", path.name, "beta")
     assert "already holds" in str(e.value)
@@ -185,10 +194,8 @@ def test_move_refuses_the_same_session_under_a_different_timestamp(mh, ws, hub_p
     silently duplicate the session in the loaded pack."""
     hub = _seed(mh, ws, hub_project, [("q", "a")])
     mh("checkpoint", "beta", cwd=hub_project, check=0)
-    mh("save", "--to", "beta", "--session-id", SID, cwd=hub_project, check=0)
-    beta = ck.resolve(hub, "beta").sessions[0]
-    beta.rename(beta.with_name("2026-07-11_0900_" + beta.name[16:]))
-    c, path = _only_session(hub_project, "alpha")
+    _, path = _only_session(hub_project, "alpha")
+    _copy_into(hub, path, "beta", "2026-07-11_0900_" + path.name[16:])
     with pytest.raises(Exception) as e:
         curate.move_session(hub, "alpha", path.name, "beta")
     assert "already holds this session" in str(e.value)
@@ -291,10 +298,14 @@ def test_dispatch_map_and_session(mh, ws, hub_project):
 
 def test_dispatch_rejects_writes_when_read_only(mh, ws, hub_project):
     hub = _seed(mh, ws, hub_project, [("q1", "a1"), ("q2", "a2")])
-    c, path = _only_session(hub_project)
+    _, path = _only_session(hub_project)
     status, data = server.dispatch(
-        hub, "POST", "/api/exchange/delete",
-        {}, {"ckpt": "alpha", "file": path.name, "index": 1}, True,
+        hub,
+        "POST",
+        "/api/exchange/delete",
+        {},
+        {"ckpt": "alpha", "file": path.name, "index": 1},
+        True,
     )
     assert status == 403 and "read-only" in data["error"]
     assert "q1" in path.read_text()
@@ -358,9 +369,7 @@ def test_live_server_edits_through_the_api(live):
     _, data = _get(f"{live['base']}/api/map", live["token"])
     file = data["checkpoints"][0]["sessions"][0]["file"]
     body = json.dumps({"ckpt": "alpha", "file": file, "index": 1}).encode()
-    req = urllib.request.Request(
-        f"{live['base']}/api/exchange/delete", data=body, method="POST"
-    )
+    req = urllib.request.Request(f"{live['base']}/api/exchange/delete", data=body, method="POST")
     req.add_header("X-Mh-Token", live["token"])
     req.add_header("Content-Type", "application/json")
     with urllib.request.urlopen(req, timeout=10) as r:
@@ -371,9 +380,7 @@ def test_live_server_edits_through_the_api(live):
 
 def test_live_server_reports_errors_as_json(live):
     body = json.dumps({"ckpt": "alpha", "file": "nope.md", "index": 1}).encode()
-    req = urllib.request.Request(
-        f"{live['base']}/api/exchange/delete", data=body, method="POST"
-    )
+    req = urllib.request.Request(f"{live['base']}/api/exchange/delete", data=body, method="POST")
     req.add_header("X-Mh-Token", live["token"])
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(req, timeout=10)

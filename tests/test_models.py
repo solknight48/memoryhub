@@ -20,8 +20,8 @@ from conftest import (
     write_pi_transcript,
     write_transcript,
 )
-from memoryhub import checkpoint as ck
 from memoryhub import agents, curate, purify, server
+from memoryhub import checkpoint as ck
 
 SID = "e5f6a7b8-5555-4555-8555-555555555555"
 PI_SID = "019f74da-9631-7c10-9d05-d50425ec4002"
@@ -32,9 +32,7 @@ def _body(project, mh, ws, turns, model=None, sid=SID):
     mh("checkpoint", "alpha", cwd=project, check=0)
     tr = write_transcript(ws["home"], project, sid, make_records(turns, model=model))
     mh("save", "--transcript", tr, cwd=project, check=0)
-    ckdir = next(
-        d for d in (project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir()
-    )
+    ckdir = next(d for d in (project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir())
     return next(ckdir.glob("*.md")).read_text()
 
 
@@ -81,9 +79,7 @@ def test_two_models_inside_one_answer_are_both_named(tmp_path):
     assert turns[0][1] == "first half\n\nsecond half"
 
 
-@pytest.mark.parametrize(
-    "bad", ["<synthetic>", "", "not a model id", "has space", None, 5]
-)
+@pytest.mark.parametrize("bad", ["<synthetic>", "", "not a model id", "has space", None, 5])
 def test_placeholders_and_junk_are_not_models(bad):
     """Claude Code writes model "<synthetic>" for replies it generated itself;
     anything that would not survive the heading round-trip is refused too."""
@@ -98,14 +94,10 @@ def test_synthetic_answers_carry_no_label(mh, ws, hub_project):
 
 def test_pi_names_its_model(mh, ws, hub_project):
     mh("checkpoint", "alpha", cwd=hub_project, check=0)
-    recs = make_pi_records(
-        [("q", "a")], cwd=str(hub_project), sid=PI_SID, model="glm-5.3"
-    )
+    recs = make_pi_records([("q", "a")], cwd=str(hub_project), sid=PI_SID, model="glm-5.3")
     tr = write_pi_transcript(ws["home"], hub_project, PI_SID, recs)
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
-    ckdir = next(
-        d for d in (hub_project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir()
-    )
+    ckdir = next(d for d in (hub_project / ".memoryhub" / "checkpoints").iterdir() if d.is_dir())
     assert "## Agent 1 — `glm-5.3`" in next(ckdir.glob("*.md")).read_text()
 
 
@@ -113,9 +105,7 @@ def test_codex_falls_back_to_the_session_model(ws, hub_project):
     """Codex records the model on the session, not per message — unverified
     against a real rollout, so this pins the assumed shape rather than claiming
     it is confirmed."""
-    write_codex_rollout(
-        ws["home"], hub_project, CX_SID, [("q", "a")], model="gpt-5-codex"
-    )
+    write_codex_rollout(ws["home"], hub_project, CX_SID, [("q", "a")], model="gpt-5-codex")
     tr = next((ws["home"] / ".codex" / "sessions").rglob(f"*{CX_SID}.jsonl"))
     _, _, models = agents.extract(agents.Discovered("codex", tr, CX_SID, "cx-x"))
     assert models == ["gpt-5-codex"]

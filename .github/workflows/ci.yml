@@ -7,6 +7,16 @@ on:
   workflow_dispatch:  # run on demand: gh workflow run ci, or the Actions tab
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+      - run: uv run --locked ruff check
+      - run: uv run --locked ruff format --check
+
   test:
     strategy:
       fail-fast: false
@@ -19,4 +29,4 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1  # no floating major tag on this action
         with:
           python-version: ${{ matrix.python }}
-      - run: uv run pytest -q
+      - run: uv run --locked pytest -q

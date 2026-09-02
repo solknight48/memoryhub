@@ -28,9 +28,7 @@ def test_checkpoint_create_and_collision(mh, hub_project):
 def test_checkpoint_names_can_be_chinese(mh, ws, hub_project):
     p = mh("checkpoint", "数据管道", cwd=hub_project, check=0)
     assert "checkpoint '数据管道' created (current)" in p.stdout
-    tr = write_transcript(
-        ws["home"], hub_project, SID_A, make_records([("你好", "世界")])
-    )
+    tr = write_transcript(ws["home"], hub_project, SID_A, make_records([("你好", "世界")]))
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     out = mh("load", cwd=hub_project, check=0).stdout
     assert "loaded: 数据管道" in out and "你好" in out
@@ -53,9 +51,7 @@ def test_save_requires_current(mh, hub_project):
 
 def test_save_from_transcript(mh, ws, hub_project):
     mh("checkpoint", "alpha", cwd=hub_project, check=0)
-    tr = write_transcript(
-        ws["home"], hub_project, SID_A, make_records([("hello", "world")])
-    )
+    tr = write_transcript(ws["home"], hub_project, SID_A, make_records([("hello", "world")]))
     p = mh("save", "--transcript", tr, cwd=hub_project, check=0)
     assert "-> alpha (1 sessions)" in p.stdout
     ckdir = next(d for d in _checkpoints_dir(hub_project).iterdir() if d.is_dir())
@@ -104,9 +100,7 @@ def test_save_to_and_file_import(mh, hub_project, tmp_path):
     doc.write_text("# external context\n")
     p = mh("save", "--file", doc, "--to", "alpha", cwd=hub_project, check=0)
     assert "-> alpha" in p.stdout
-    alpha = next(
-        d for d in _checkpoints_dir(hub_project).iterdir() if d.name.endswith("_alpha")
-    )
+    alpha = next(d for d in _checkpoints_dir(hub_project).iterdir() if d.name.endswith("_alpha"))
     assert list(alpha.glob("*_notes.md"))
 
 
@@ -116,9 +110,7 @@ def test_save_fallback_picks_newest_across_agents(mh, ws, hub_project):
     live session itself."""
     mh("checkpoint", "alpha", cwd=hub_project, check=0)
     pi_sid = "019f596e-94d6-7332-bc08-d07aa8782001"
-    cl = write_transcript(
-        ws["home"], hub_project, SID_A, make_records([("cl-q", "cl-a")])
-    )
+    cl = write_transcript(ws["home"], hub_project, SID_A, make_records([("cl-q", "cl-a")]))
     pi = write_pi_transcript(
         ws["home"],
         hub_project,
@@ -164,9 +156,7 @@ def test_list_output_and_json(mh, ws, hub_project):
 
 def test_show_checkpoint_and_session(mh, ws, hub_project):
     mh("checkpoint", "alpha", cwd=hub_project, check=0)
-    tr = write_transcript(
-        ws["home"], hub_project, SID_A, make_records([("needle-q", "needle-a")])
-    )
+    tr = write_transcript(ws["home"], hub_project, SID_A, make_records([("needle-q", "needle-a")]))
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     p = mh("show", "alpha", cwd=hub_project, check=0)
     assert "needle-q" in p.stdout and "mh session: alpha/" in p.stdout
@@ -175,3 +165,28 @@ def test_show_checkpoint_and_session(mh, ws, hub_project):
     p = mh("show", "alpha/zzz", cwd=hub_project)
     assert p.returncode == 1
     assert "no session" in p.stderr
+
+
+def test_a_saved_session_lives_in_one_checkpoint(mh, ws, hub_project):
+    """The policy every save path shares: a plain `mh save` follows the session
+    to where it already lives even after the current pointer moved on, and an
+    explicit other target moves it — never a second copy."""
+    mh("checkpoint", "alpha", cwd=hub_project, check=0)
+    tr = write_transcript(ws["home"], hub_project, SID_A, make_records([("q", "a")]))
+    mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    mh("checkpoint", "beta", cwd=hub_project, check=0)  # current is now beta
+
+    tr = write_transcript(
+        ws["home"], hub_project, SID_A, make_records([("q", "a"), ("more", "stuff")])
+    )
+    p = mh("save", "--transcript", tr, cwd=hub_project, check=0)
+    assert "-> alpha" in p.stdout
+    alpha = next(d for d in _checkpoints_dir(hub_project).iterdir() if d.name.endswith("_alpha"))
+    beta = next(d for d in _checkpoints_dir(hub_project).iterdir() if d.name.endswith("_beta"))
+    assert len(list(alpha.glob("*_a1b2c3d4.md"))) == 1 and not list(beta.glob("*.md"))
+
+    p = mh("save", "--to", "beta", "--transcript", tr, cwd=hub_project, check=0)
+    assert "-> beta" in p.stdout and "moved from alpha" in p.stdout
+    assert not list(alpha.glob("*.md")) and len(list(beta.glob("*_a1b2c3d4.md"))) == 1
+    journal = mh("log", cwd=hub_project, check=0).stdout
+    assert "(moved from alpha)" in journal

@@ -74,7 +74,7 @@ def test_hook_save_keeps_a_compacted_save_of_the_same_session(mh, ws, hub_projec
     mh("save", "--compact", "--file", summary, "--transcript", tr, cwd=hub_project, check=0)
     p = mh("hook", "save", cwd=hub_project, input=_payload(hub_project, tr), check=0)
     assert "compacted save — kept as is" in p.stderr
-    (fname,) = _sessions(hub_project)
+    assert len(_sessions(hub_project)) == 1
     hub = hub_project / ".memoryhub"
     body = (ck.resolve(hub, "alpha").sessions[0]).read_text()
     assert "Compacted" in body and "condensed" in body
@@ -107,8 +107,11 @@ def test_hook_load_emits_the_pack_on_startup(mh, ws, hub_project):
     tr = write_transcript(ws["home"], hub_project, SID, make_records([("warm-q", "warm-a")]))
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     p = mh(
-        "hook", "load", cwd=hub_project,
-        input=json.dumps({"cwd": str(hub_project), "source": "startup"}), check=0,
+        "hook",
+        "load",
+        cwd=hub_project,
+        input=json.dumps({"cwd": str(hub_project), "source": "startup"}),
+        check=0,
     )
     assert "<!-- mh | loaded: alpha" in p.stdout and "warm-q" in p.stdout
 
@@ -119,24 +122,33 @@ def test_hook_load_skips_resume_and_compact(mh, ws, hub_project):
     mh("save", "--transcript", tr, cwd=hub_project, check=0)
     for source in ("resume", "compact"):
         p = mh(
-            "hook", "load", cwd=hub_project,
-            input=json.dumps({"cwd": str(hub_project), "source": source}), check=0,
+            "hook",
+            "load",
+            cwd=hub_project,
+            input=json.dumps({"cwd": str(hub_project), "source": source}),
+            check=0,
         )
         assert p.stdout == ""
 
 
 def test_hook_load_without_a_hub_is_silent(mh, project):
     p = mh(
-        "hook", "load", cwd=project,
-        input=json.dumps({"cwd": str(project), "source": "startup"}), check=0,
+        "hook",
+        "load",
+        cwd=project,
+        input=json.dumps({"cwd": str(project), "source": "startup"}),
+        check=0,
     )
     assert p.stdout == "" and p.stderr == ""
 
 
 def test_hook_load_without_a_current_checkpoint_skips_quietly(mh, hub_project):
     p = mh(
-        "hook", "load", cwd=hub_project,
-        input=json.dumps({"cwd": str(hub_project), "source": "startup"}), check=0,
+        "hook",
+        "load",
+        cwd=hub_project,
+        input=json.dumps({"cwd": str(hub_project), "source": "startup"}),
+        check=0,
     )
     assert p.stdout == ""
     assert "skipped" in p.stderr
@@ -171,10 +183,14 @@ def test_hook_install_is_idempotent(mh, hub_project):
 def test_hook_install_merges_with_existing_settings(mh, hub_project):
     s = _settings(hub_project)
     s.parent.mkdir(parents=True)
-    s.write_text(json.dumps({
-        "permissions": {"allow": ["Bash(ls:*)"]},
-        "hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "echo bye"}]}]},
-    }))
+    s.write_text(
+        json.dumps(
+            {
+                "permissions": {"allow": ["Bash(ls:*)"]},
+                "hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "echo bye"}]}]},
+            }
+        )
+    )
     mh("hook", "install", cwd=hub_project, check=0)
     data = json.loads(s.read_text())
     assert data["permissions"] == {"allow": ["Bash(ls:*)"]}  # untouched
@@ -185,9 +201,13 @@ def test_hook_install_merges_with_existing_settings(mh, hub_project):
 def test_hook_install_remove_only_strips_mh_entries(mh, hub_project):
     s = _settings(hub_project)
     s.parent.mkdir(parents=True)
-    s.write_text(json.dumps({
-        "hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "echo bye"}]}]},
-    }))
+    s.write_text(
+        json.dumps(
+            {
+                "hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "echo bye"}]}]},
+            }
+        )
+    )
     mh("hook", "install", cwd=hub_project, check=0)
     p = mh("hook", "install", "--remove", cwd=hub_project, check=0)
     assert "removed mh hooks" in p.stdout

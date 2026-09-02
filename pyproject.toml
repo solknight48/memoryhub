@@ -1,6 +1,6 @@
 [project]
 name = "memoryhub"
-version = "0.2.0"
+dynamic = ["version"]
 description = "mh — git-like checkpoints for purified AI session context"
 readme = "README.en.md"
 requires-python = ">=3.12"
@@ -16,8 +16,34 @@ Issues = "https://github.com/solknight48/memoryhub/issues"
 mh = "memoryhub.cli:app"
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest", "pytest-xdist", "ruff"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-n auto"  # the suite is hermetic per test, so it parallelises freely
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  "B008",                        # typer builds options in argument defaults by design
+  "RUF001", "RUF002", "RUF003",  # typographic dashes and CJK in strings are deliberate
+  "SIM108",                      # a ternary is not always the clearer form
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_links_load.py" = ["E501"]  # a session fixture quotes mh's one-line preamble
+
+[tool.ruff.lint.isort]
+known-first-party = ["memoryhub", "conftest"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/memoryhub/__init__.py"

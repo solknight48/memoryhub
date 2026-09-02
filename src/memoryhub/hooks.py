@@ -63,7 +63,7 @@ def _load_settings(path: Path) -> dict:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise MhError(f"{path} is not valid JSON ({e}); fix it before installing hooks")
+        raise MhError(f"{path} is not valid JSON ({e}); fix it before installing hooks") from None
     if not isinstance(data, dict):
         raise MhError(f"{path} does not hold a JSON object; refusing to rewrite it")
     return data
@@ -125,10 +125,7 @@ def remove(path: Path) -> list[str]:
             kept_hooks = [
                 h
                 for h in e.get("hooks", [])
-                if not (
-                    isinstance(h, dict)
-                    and str(h.get("command", "")).startswith(MH_PREFIX)
-                )
+                if not (isinstance(h, dict) and str(h.get("command", "")).startswith(MH_PREFIX))
             ]
             if kept_hooks or not e.get("hooks"):
                 kept_entries.append({**e, "hooks": kept_hooks} if "hooks" in e else e)

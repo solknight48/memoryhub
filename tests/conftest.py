@@ -21,9 +21,7 @@ TIMEOUT = 30
 UI_PAGE = Path(memoryhub.__file__).parent / "ui" / "index.html"
 UI_HARNESS = Path(__file__).parent / "uijs.mjs"
 HAS_NODE = shutil.which("node") is not None
-needs_node = pytest.mark.skipif(
-    not HAS_NODE, reason="needs node to run the page's own javascript"
-)
+needs_node = pytest.mark.skipif(not HAS_NODE, reason="needs node to run the page's own javascript")
 
 
 def run_ui_js(**calls: list) -> dict[str, list]:
@@ -49,8 +47,7 @@ def ws(tmp_path, monkeypatch):
     (home / ".config").mkdir(parents=True)
     gitconfig = home / "gitconfig"
     gitconfig.write_text(
-        "[user]\n\tname = Test\n\temail = test@example.com\n"
-        "[init]\n\tdefaultBranch = main\n"
+        "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n"
     )
     env = {
         "HOME": str(home),
@@ -73,6 +70,12 @@ def ws(tmp_path, monkeypatch):
         "GIT_TERMINAL_PROMPT",
     ):
         monkeypatch.setenv(var, env[var])
+    # A developer running the suite inside tmux: `TMUX` names their server's
+    # socket and wins over TMUX_TMPDIR, so the relay tests' private server —
+    # and their `tmux kill-server` — would land on the real one, killing the
+    # very terminal the suite runs in. The tests must not see a tmux at all.
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("TMUX_PANE", raising=False)
     return {"root": tmp_path, "home": home, "env": env}
 
 
@@ -236,9 +239,7 @@ def write_pi_transcript(
     records,
     stamp_name="2026-07-10T04-00-00-000Z",
 ) -> Path:
-    return dump_jsonl(
-        pi_dir_of(home, project_root) / f"{stamp_name}_{sid}.jsonl", records
-    )
+    return dump_jsonl(pi_dir_of(home, project_root) / f"{stamp_name}_{sid}.jsonl", records)
 
 
 def write_codex_rollout(

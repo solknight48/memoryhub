@@ -26,6 +26,13 @@
   --critical: #d03b3b;
   --good: #0a7d43;
   --avatar-ink: #161310;
+  /* code tokens: readable on the cream page, same roles in both themes */
+  --c-comment: #8d867c;
+  --c-string: #0a7d43;
+  --c-key: #7a2fd6;
+  --c-num: #b45309;
+  --c-func: #1f6feb;
+  --c-type: #8a6d00;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -45,9 +52,18 @@
     --neutral-mark: #6a635a;
     --critical: #e0655a;
     --good: #39c47a;
+    --c-comment: #8d867c;
+    --c-string: #9cd67f;
+    --c-key: #d59bf6;
+    --c-num: #f2a35e;
+    --c-func: #7fc3f5;
+    --c-type: #f5d652;
   }
 }
 * { box-sizing: border-box; }
+/* class rules that set `display` outbid the UA's [hidden] rule, so the
+   attribute silently stops working — .badge did exactly that to #robadge. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--page);
@@ -87,6 +103,10 @@ button.danger { color: var(--critical); border-color: color-mix(in srgb, var(--c
 button.danger:hover { border-color: var(--critical); color: var(--critical); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover { color: #fff; opacity: 0.92; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:disabled:hover { border-color: var(--baseline); color: var(--text-primary); }
+button.primary:disabled:hover { color: #fff; }
+textarea:disabled { opacity: 0.6; }
 button.mint { background: var(--mint); border-color: transparent; color: var(--mint-ink); font-weight: 700; }
 button.mint:hover { color: var(--mint-ink); opacity: 0.88; }
 input[type=number], textarea {
@@ -108,7 +128,7 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
           font-weight: 800; font-size: 14px; color: var(--avatar-ink); }
 .smain { flex: 1; min-width: 0; }
 .stitle { font-weight: 750; font-size: 14.5px; }
-.stitle .key { color: var(--muted); font-weight: 500; font-size: 12.5px;
+.stitle .skey { color: var(--muted); font-weight: 500; font-size: 12.5px;
                font-family: ui-monospace, monospace; margin-left: 4px; }
 .spreview { color: var(--text-secondary); font-size: 13px; line-height: 1.45; margin-top: 3px;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -141,6 +161,13 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 .md pre { background: var(--page); border: 1px solid var(--grid); border-radius: 8px;
           padding: 10px 12px; margin: 0 0 10px; overflow-x: auto; }
 .md pre code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: none; padding: 0; }
+/* the highlighter's six roles; anything it is unsure of stays plain text */
+pre .c { color: var(--c-comment); font-style: italic; }
+pre .s { color: var(--c-string); }
+pre .k { color: var(--c-key); font-weight: 600; }
+pre .n { color: var(--c-num); }
+pre .f { color: var(--c-func); }
+pre .t { color: var(--c-type); }
 .md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em;
            background: color-mix(in srgb, var(--accent) 8%, transparent);
            padding: 1px 4px; border-radius: 4px; overflow-wrap: break-word; }
@@ -152,7 +179,7 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 .md hr { border: 0; border-top: 1px solid var(--grid); margin: 12px 0; }
 .md .quote { border-left: 3px solid var(--baseline); padding-left: 10px; margin: 0 0 10px;
              color: var(--text-secondary); white-space: pre-wrap; max-width: 74ch; }
-.md a { color: var(--accent); }
+.md a { color: var(--accent); overflow-wrap: break-word; }
 .md .md-table { overflow-x: auto; margin: 0 0 10px; }
 .md table { border-collapse: collapse; width: max-content; min-width: 100%;
             font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -187,7 +214,79 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
   border: 1px solid var(--baseline); border-radius: 14px; padding: 6px;
   box-shadow: 0 6px 20px rgba(0,0,0,.22); min-width: 160px; max-height: 60vh; overflow-y: auto;
 }
+/* the live session: a green pulse while the page is following the transcript */
+.livedot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+           background: var(--good); margin-left: 8px; vertical-align: middle;
+           animation: pulse 2.2s ease-in-out infinite; }
+.livedot.off { background: var(--neutral-mark); animation: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+.ex.dropped { opacity: 0.55; }
+.droppreview { padding: 11px 16px; color: var(--text-secondary);
+               text-decoration: line-through; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+/* the unfiltered stream: one block per thing the agent emitted */
+.part { border-top: 1px dashed var(--grid); padding: 9px 0 1px; }
+.part:first-child { border-top: 0; padding-top: 0; }
+.partchip { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.part.think .md { color: var(--text-secondary); }
+/* marker | name | argument, as three columns: a command long enough to wrap
+   (a path, a URL) keeps its later lines under the argument instead of falling
+   back to the container edge, where it reads as a new call */
+.tool summary { cursor: pointer; list-style: none; display: flex; gap: 7px;
+                     font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+                     color: var(--text-secondary); }
+.tool summary::-webkit-details-marker { display: none; }
+.tool summary::before { content: "▸"; color: var(--muted); flex: none; }
+.tool[open] summary::before { content: "▾"; }
+.tool summary .toolname { flex: none; color: var(--accent); font-weight: 700; }
+.tool summary .toolname::after { content: " —"; color: var(--muted); font-weight: 400; }
+/* break-word, never `anywhere`: a path or URL wraps whole to the next line and
+   only splits when it cannot fit on a line at all. `anywhere` chops mid-token
+   ("/tmp/mh-ui-" / "7777.log"), which reads as a broken link. */
+.tool summary .toolarg { min-width: 0; overflow-wrap: break-word; }
+.tool summary .badge { flex: none; align-self: center; }
+.tool pre { background: var(--page); border: 1px solid var(--grid); border-radius: 8px;
+                 padding: 8px 10px; margin: 6px 0 0; overflow-x: auto;
+                 font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* one reply asking for several tools: they ran together, so they read as one
+   step with an accent rail, not as N adjacent steps */
+.part.batch { border-left: 2px solid var(--accent); padding-left: 11px; }
+.batchhead { font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+             text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+.batchhead::before { content: "⇉ "; }
+.part.batch .part { border-top: 0; padding: 1px 0; }
+.clip { color: var(--muted); font-size: 11px; font-style: italic; }
+/* a picture in the session: pasted with a question, or a screenshot the agent
+   read. Shown small, the full size one click away, served by mh itself */
+.shot { display: block; max-width: 100%; max-height: 360px; border-radius: 10px;
+        border: 1px solid var(--grid); margin: 8px 0 4px; background: var(--page); }
+.shotlink { display: inline-block; max-width: 100%; }
+/* type back into the session: a paste into its terminal, not a fake reply.
+   It sits under the dialog like a chat box and stays pinned to the bottom of
+   the window while the live section is in view, so the newest exchange and
+   the place to answer it are never a scroll apart. Sticky, not fixed: it
+   scrolls away with its section instead of covering the map below. */
+.composer { position: sticky; bottom: 12px; border: 1px solid var(--baseline);
+            border-radius: 14px; padding: 10px 12px; background: var(--page);
+            box-shadow: 0 1px 2px rgba(20, 15, 5, 0.04),
+                        0 -10px 24px -18px rgba(20, 15, 5, 0.45); }
+.composer textarea { border: 0; background: transparent; padding: 0; min-height: 52px;
+                     font: 13.5px/1.55 system-ui, sans-serif; }
+.composer textarea:focus { outline: none; }
+.composer .to { font-size: 12px; color: var(--muted); flex: 1; min-width: 0;
+                overflow-wrap: anywhere; }
+.composer .to.off { color: var(--critical); }
+.liverow { margin-bottom: 12px; }
+.liverow label { font-size: 12px; }
 #menu .menu-label { font-size: 11px; color: var(--muted); padding: 2px 8px 6px; }
+#menu .askfield { display: block; width: 260px; margin: 2px 0 0; padding: 7px 12px; font: inherit;
+                  font-size: 13px; border-radius: 10px; border: 1px solid var(--baseline);
+                  background: var(--surface-1); color: var(--text-primary); }
+#menu .askfield:focus { outline: none; border-color: var(--accent); }
+/* the feed shows the newest exchanges; the rest is one click away, not a scroll */
+.earlier { display: block; width: 100%; margin: 0 0 14px; border-style: dashed;
+           color: var(--text-secondary); }
 #menu button { display: block; width: 100%; text-align: left; border: 0;
                background: transparent; padding: 6px 10px; border-radius: 8px; }
 #menu button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -200,7 +299,8 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
   <span class="hub" id="hubpath"></span>
   <span class="muted" id="current" style="font-size:12px"></span>
   <span class="spacer"></span>
-  <label class="muted" style="font-size:12px">budget
+  <button id="golive" hidden title="Jump to the session running right now">● live session</button>
+  <label class="muted" style="font-size:12px" title="Token budget for the next mh load — the map marks the sessions that fit">budget
     <input type="number" id="budget" min="0" step="500"
            style="width:90px;display:inline-block;margin-left:6px">
   </label>
@@ -237,6 +337,30 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
     <h2 id="sestitle"></h2>
     <div id="exchanges"></div>
   </section>
+
+  <section id="livesec" hidden>
+    <h2>Live session<span class="livedot" id="livedot"></span></h2>
+    <div class="row liverow">
+      <span class="hub" id="livekey"></span>
+      <span class="muted" id="livemeta" style="font-size:12px"></span>
+      <span class="spacer"></span>
+      <button id="live-follow">following…</button>
+      <button id="live-newest" hidden title="This session is not the newest transcript of the project">follow the newest</button>
+      <label class="muted"><input type="checkbox" id="livefull" checked> full output</label>
+      <label class="muted"><input type="checkbox" id="livewatch" checked> watch</label>
+      <button id="live-discard" hidden>discard live edits</button>
+      <button id="live-save" class="mint">save to checkpoint</button>
+    </div>
+    <div id="liveex"></div>
+
+    <div class="composer" id="composer">
+      <textarea id="say" placeholder="type to this session — it lands in its terminal as if you typed it"></textarea>
+      <div class="row" style="margin-top:8px">
+        <span class="to" id="sayto"></span>
+        <button id="say-send" class="primary">send ⌘⏎</button>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div id="toast"></div>
@@ -244,7 +368,8 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 
 <script id="mh-config" type="application/json">{}</script>
 <script>
-const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const PARAMS = new URLSearchParams(location.search);
+const TOKEN = PARAMS.get("t") || "";
 const $ = (id) => document.getElementById(id);
 // Server-injected config; the empty-object fallback keeps the page sane if it
 // is ever opened as a plain file.
@@ -258,7 +383,7 @@ function toast(msg, kind) {
   t.textContent = msg;
   t.className = "show " + (kind || "");
   clearTimeout(t._h);
-  t._h = setTimeout(() => (t.className = ""), 3200);
+  t._h = setTimeout(() => (t.className = ""), kind === "err" ? 6000 : 3200);
 }
 
 async function api(path, opts) {
@@ -267,7 +392,12 @@ async function api(path, opts) {
     headers: { "X-Mh-Token": TOKEN, "Content-Type": "application/json" },
   });
   const data = await res.json().catch(() => ({ error: "bad response" }));
-  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  if (!res.ok) {
+    // a failed git call sends its first stderr line along; that is the fix
+    const detail = typeof data.detail === "string" && data.detail.trim()
+      ? " — " + data.detail.trim().split("\n")[0] : "";
+    throw new Error((data.error || ("HTTP " + res.status)) + detail);
+  }
   return data;
 }
 const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
@@ -296,13 +426,7 @@ function onMenuDismiss(e) {
   if (m && !m.contains(e.target)) closeMenu();
 }
 function onMenuKey(e) { if (e.key === "Escape") closeMenu(); }
-function menu(anchor, label, options, emptyMsg, onPick) {
-  closeMenu();
-  if (!options.length) { toast(emptyMsg, "err"); return; }
-  const m = el("div", { id: "menu" }, el("div", { class: "menu-label", text: label }));
-  options.forEach((o) => m.appendChild(el("button", { text: o, onclick: (e) => {
-    e.stopPropagation(); closeMenu(); onPick(o);
-  } })));
+function openMenu(m, anchor) {
   document.body.appendChild(m);
   const r = anchor.getBoundingClientRect();
   m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px";
@@ -311,6 +435,39 @@ function menu(anchor, label, options, emptyMsg, onPick) {
     addEventListener("click", onMenuDismiss, true);
     addEventListener("keydown", onMenuKey, true);
   }, 0);
+}
+function menu(anchor, label, options, emptyMsg, onPick) {
+  closeMenu();
+  if (!options.length) { toast(emptyMsg, "err"); return; }
+  const m = el("div", { id: "menu" }, el("div", { class: "menu-label", text: label }));
+  options.forEach((o) => m.appendChild(el("button", { text: o, onclick: (e) => {
+    e.stopPropagation(); closeMenu(); onPick(o);
+  } })));
+  openMenu(m, anchor);
+}
+// the same popover with one text field, for the two places that need a name
+// typed — prompt() blocks the page, matches nothing on it, and cannot be
+// driven by an agent's browser
+function ask(anchor, label, initial, onSubmit) {
+  closeMenu();
+  const field = el("input", { type: "text", class: "askfield", value: initial || "",
+                              placeholder: "letters and digits of any script" });
+  const submit = () => {
+    const v = field.value.trim();
+    if (!v || v === initial) { closeMenu(); return; }
+    closeMenu(); onSubmit(v);
+  };
+  field.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+  });
+  const m = el("div", { id: "menu" },
+    el("div", { class: "menu-label", text: label }), field,
+    el("div", { class: "row end", style: "margin-top:8px" },
+      el("button", { text: "cancel", onclick: (e) => { e.stopPropagation(); closeMenu(); } }),
+      el("button", { class: "primary", text: "ok", onclick: (e) => { e.stopPropagation(); submit(); } })));
+  openMenu(m, anchor);
+  field.focus();
+  field.select();
 }
 
 function el(tag, props, ...kids) {
@@ -337,15 +494,52 @@ const svg = (tag, props) => {
 // This renders the safe common subset — fences, headings, lists, quotes,
 // `code`, **bold**, links — and leaves anything else exactly as typed.
 
+// http(s) only — nothing else can become an href, so no scheme is smuggled in
+// through dialog. The page already sends no referrer, and every link opens in
+// its own tab with no handle back to this one.
+const link = (text, href) =>
+  el("a", { text, href, target: "_blank", rel: "noopener noreferrer" });
+
+// Where a bare URL really ends. Sentence punctuation after it is prose, and so
+// is a closing bracket that never opened inside the URL — but a URL may
+// legitimately carry balanced ones, so those stay.
+function urlEnd(url) {
+  const pairs = { ")": "(", "]": "[", "}": "{" };
+  let end = url.length;
+  while (end > 0) {
+    const ch = url[end - 1];
+    if (".,;:!?'\"".includes(ch)) { end--; continue; }
+    if (pairs[ch]) {
+      const head = url.slice(0, end);
+      const opened = head.split(pairs[ch]).length - 1;
+      const closed = head.split(ch).length - 1;
+      if (closed > opened) { end--; continue; }
+    }
+    break;
+  }
+  return end;
+}
+
 function inline(text) {
   const frag = document.createDocumentFragment();
-  const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g;
+  // code, bold, [text](url), then a bare URL — in that order, so a URL inside
+  // backticks stays code and a markdown link keeps its label
+  const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>"']+)/g;
   let last = 0, m;
   while ((m = re.exec(text))) {
     if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
     if (m[1]) frag.appendChild(el("code", { text: m[1].slice(1, -1) }));
-    else if (m[2]) frag.appendChild(el("strong", { text: m[2].slice(2, -2) }));
-    else frag.appendChild(el("a", { text: m[3], href: m[4], target: "_blank", rel: "noopener noreferrer" }));
+    else if (m[2]) {
+      // recurse: a URL wrapped in bold is still a URL, and mh prints them that way
+      const strong = el("strong", {});
+      strong.appendChild(inline(m[2].slice(2, -2)));
+      frag.appendChild(strong);
+    } else if (m[3] !== undefined) frag.appendChild(link(m[3], m[4]));
+    else {
+      const href = m[5].slice(0, urlEnd(m[5]));
+      frag.appendChild(link(href, href));
+      re.lastIndex = m.index + href.length;  // hand the punctuation back to prose
+    }
     last = re.lastIndex;
   }
   if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
@@ -367,6 +561,99 @@ function cells(line) {
   return out.map((c) => c.trim());
 }
 
+// --- syntax colour, built from DOM nodes like everything else --------------
+// A session is mostly code, and a wall of one colour is hard to read. This is
+// a deliberately small tokenizer — comments, strings, numbers, keywords, call
+// names — not a parser: it colours what is unambiguous and leaves the rest
+// alone. No dependency, no innerHTML, and it never alters a character of the
+// code: strip the spans and you have the block back byte for byte.
+
+const LANGS = {
+  cpp: {
+    hash: false,  // '#' starts a preprocessor line here, not a comment
+    words: "alignas auto bool break case catch char class const constexpr continue default delete do double else enum explicit extern false float for friend goto if inline int long mutable namespace new noexcept nullptr operator private protected public return short signed sizeof static struct switch template this throw true try typedef typename union unsigned using virtual void volatile while",
+  },
+  python: {
+    hash: true,
+    words: "and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return self True try while with yield",
+  },
+  js: {
+    hash: false,
+    words: "async await break case catch class const continue default delete do else export extends false finally for from function if import in instanceof let new null of return super switch this throw true try typeof undefined var void while yield",
+  },
+  shell: {
+    hash: true,
+    words: "case cd do done echo elif else esac exit export fi for function if in local return set source then unset until while",
+  },
+  json: { hash: false, words: "true false null" },
+  toml: { hash: true, words: "true false" },
+  generic: { hash: false, words: "" },
+};
+const LANG_ALIAS = {
+  "c++": "cpp", cc: "cpp", h: "cpp", hpp: "cpp", c: "cpp", rust: "cpp", go: "cpp",
+  py: "python", python3: "python",
+  javascript: "js", ts: "js", typescript: "js", jsx: "js", tsx: "js",
+  sh: "shell", bash: "shell", zsh: "shell", console: "shell", shell: "shell",
+  yaml: "toml", yml: "toml", ini: "toml", conf: "toml",
+};
+
+// Only on a signal that is hard to mistake; anything else stays generic, which
+// colours strings and numbers and claims nothing about the language.
+function codeLang(info, text) {
+  const tag = (info || "").trim().toLowerCase();
+  if (tag) return LANGS[tag] ? tag : (LANG_ALIAS[tag] || "generic");
+  if (/#include|std::|->\w+\(|\w+::\w/.test(text)) return "cpp";
+  if (/^\s*(def|class)\s+\w+|^\s*(import|from)\s+\w+/m.test(text)) return "python";
+  if (/=>|\bfunction\b|\bconst\s+\w+\s*=/.test(text)) return "js";
+  if (/^\s*[$#]\s+\S|^#!\/|\b(grep|sed|awk|curl|git|uv run|pytest)\b/m.test(text)) return "shell";
+  if (/^\s*[{[][\s\S]*[}\]]\s*$/.test(text) && /"\w+"\s*:/.test(text)) return "json";
+  return "generic";
+}
+
+const codeRules = {};
+function codeRe(lang) {
+  if (codeRules[lang]) { codeRules[lang].lastIndex = 0; return codeRules[lang]; }
+  const spec = LANGS[lang] || LANGS.generic;
+  const comment = spec.hash ? "\\/\\/[^\\n]*|#[^\\n]*" : "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/";
+  const re = new RegExp(
+    "(" + comment + ")" +                                  // 1 comment
+    "|(\"(?:\\\\.|[^\"\\\\\\n])*\"|'(?:\\\\.|[^'\\\\\\n])*')" +  // 2 string
+    "|(\\b\\d[\\w.]*)" +                                   // 3 number
+    "|([A-Za-z_][\\w]*)",                                  // 4 word
+    "g"
+  );
+  codeRules[lang] = re;
+  return re;
+}
+
+function highlight(text, lang) {
+  const frag = document.createDocumentFragment();
+  const words = new Set((LANGS[lang] || LANGS.generic).words.split(" ").filter(Boolean));
+  const re = codeRe(lang);
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    if (m[1]) frag.appendChild(el("span", { class: "c", text: m[1] }));
+    else if (m[2]) frag.appendChild(el("span", { class: "s", text: m[2] }));
+    else if (m[3]) frag.appendChild(el("span", { class: "n", text: m[3] }));
+    else {
+      const word = m[4], after = text.slice(re.lastIndex);
+      // CamelCase only, and never in shell: ALL-CAPS words are as often prose
+      // in an ascii diagram as they are constants, and colouring those is noise
+      const typish = /^[A-Z][a-z]\w*$/.test(word) && lang !== "generic" && lang !== "shell";
+      const cls = words.has(word) ? "k"
+                : /^\s*\(/.test(after) ? "f"
+                : typish ? "t"
+                : "";
+      frag.appendChild(cls ? el("span", { class: cls, text: word })
+                           : document.createTextNode(word));
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+  return frag;
+}
+
 function md(text) {
   const root = el("div", { class: "md" });
   const lines = String(text).split("\n");
@@ -380,16 +667,17 @@ function md(text) {
   };
   while (i < lines.length) {
     const line = lines[i];
-    const f = line.match(/^\s*(```|~~~)/);
+    const f = line.match(/^\s*(```|~~~) *([\w+#.-]*)/);
     if (f) {  // fenced code: verbatim, same token closes (as in curate.py)
       flushP();
-      const token = f[1], buf = [];
+      const token = f[1], info = f[2], buf = [];
       i++;
       while (i < lines.length && !lines[i].trimStart().startsWith(token)) { buf.push(lines[i]); i++; }
       if (i < lines.length) i++;  // the closing fence
-      const pre = el("pre", {});
-      pre.appendChild(el("code", { text: buf.join("\n") }));
-      root.appendChild(pre);
+      const body = buf.join("\n");
+      const code = el("code", {});
+      code.appendChild(highlight(body, codeLang(info, body)));
+      root.appendChild(el("pre", {}, code));
       continue;
     }
     const h = line.match(/^(#{1,4}) +(.*)$/);
@@ -470,6 +758,22 @@ function md(text) {
   }
   flushP();
   return root;
+}
+
+// A picture the page can show — served by mh: a local image file (a
+// screenshot the agent read) or one pasted into the session, decoded from
+// the transcript. The token rides along as it does on every request.
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i;
+function imageUrl(base) {
+  const token = typeof TOKEN === "undefined" ? "" : TOKEN;
+  return base + (base.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(token);
+}
+function picture(url, alt) {
+  const img = el("img", { class: "shot", loading: "lazy", alt: alt || "", src: url });
+  // a file that has gone is a line of text, not a broken-image glyph
+  img.addEventListener("error", () => img.replaceWith(
+    el("span", { class: "clip", text: "(picture not available: " + (alt || url) + ")" })));
+  return el("a", { class: "shotlink", href: url, target: "_blank", rel: "noopener" }, img);
 }
 
 function tip(evt, lines) {
@@ -626,7 +930,7 @@ function selectCheckpoint(slug) {
     const av = el("div", { class: "avatar", text: initialsFor(s.file) });
     av.style.background = avatarColor(sessionKey(s.file));
     const title = el("div", { class: "stitle", text: niceStamp(s.file) },
-      el("span", { class: "key", text: "‹" + sessionKey(s.file) + "›" }));
+      el("span", { class: "skey", text: "‹" + sessionKey(s.file) + "›" }));
     if (omitted.has(s.id)) title.appendChild(el("span", { class: "badge", text: "over budget" }));
     if (s.compacted) title.appendChild(el("span", { class: "badge", text: "compacted" }));
     if (s.legacy) title.appendChild(el("span", { class: "badge", text: "Q&A format" }));
@@ -729,6 +1033,342 @@ function editCard(card, data, ex) {
   card.appendChild(wrap);
 }
 
+// --- the live session ------------------------------------------------------
+// The transcript the agent is writing right now, re-read whenever it grows.
+// Editing here never touches the transcript: each decision is recorded in a
+// draft that mh applies at every save, so an exchange dropped mid-session is
+// still gone when the session lands in a checkpoint.
+
+const LIVE_POLL_MS = 2500;    // following the terminal, roughly a breath behind
+const LIVE_HIDDEN_MS = 20000; // background tab: keep the fp warm, nothing more
+const LIVE_TAIL = 3;          // exchanges shown by default: the feed is about now
+// `?sid=` pins the live panel to one session: `mh ui` run from inside an agent
+// session names its own, so the page follows the session that asked for it
+let LIVE = null, LIVE_SID = PARAMS.get("sid") || null, LIVE_EDIT = null, LIVE_TIMER = null;
+let LIVE_ERR = false;
+// A pin from the link (as opposed to a pick from the menu) holds only while
+// that session is alive: once it has been quiet this long and the project has
+// a newer transcript, the page follows what is happening now instead.
+let LIVE_PINNED = PARAMS.get("sid") || null;
+const LIVE_QUIET = 600;  // seconds
+
+function niceIdle(secs) {
+  if (secs < 90) return `${secs} s`;
+  if (secs < 5400) return `${Math.round(secs / 60)} min`;
+  return `${Math.round(secs / 360) / 10} h`;
+}
+
+// Follow the newest transcript, and take the pin out of the address bar so a
+// reload does not bring the old session back.
+function followNewest(why) {
+  LIVE_PINNED = null; LIVE_SID = null; LIVE = null;
+  history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(TOKEN));
+  if (why) toast(why, "ok");
+  runLive();
+}
+let LIVE_ALL = false;         // the reader asked for the whole session
+// which tool calls the reader has opened, kept across redraws so a poll two
+// seconds later does not close what they are in the middle of reading
+const LIVE_OPEN = new Set();
+
+async function pollLive() {
+  // An open editor owns the panel: redrawing under it would throw away what
+  // the user is typing while the agent keeps answering.
+  if (LIVE_EDIT !== null) return;
+  const q = new URLSearchParams({ fp: (LIVE && LIVE.fp) || "" });
+  if (LIVE_SID) q.set("sid", LIVE_SID);
+  if ($("livefull").checked) q.set("full", "1");
+  try {
+    const d = await api("/api/live?" + q);
+    LIVE_ERR = false;
+    if (!d.present) { LIVE = null; $("livesec").hidden = true; $("golive").hidden = true; return; }
+    if (LIVE_PINNED && d.newest && d.key !== d.newest) {
+      const mine = (d.sessions || []).find((s) => s.key === d.key);
+      if (mine && mine.idle >= LIVE_QUIET) {
+        followNewest(`‹${d.key}› has been quiet for ${niceIdle(mine.idle)} — following ‹${d.newest}›`);
+        return;
+      }
+    }
+    if (d.unchanged) { LIVE.fp = d.fp; return; }
+    LIVE = d;
+    drawLive();
+  } catch (e) {
+    if (!LIVE_ERR) toast(e.message, "err");  // once, not every 2.5s
+    LIVE_ERR = true;
+  }
+}
+
+function scheduleLive() {
+  clearTimeout(LIVE_TIMER);
+  if (!$("livewatch").checked) return;
+  LIVE_TIMER = setTimeout(runLive, document.hidden ? LIVE_HIDDEN_MS : LIVE_POLL_MS);
+}
+async function runLive() { await pollLive(); scheduleLive(); }
+
+// A live mutation: post, report, re-read the transcript, and refresh the map
+// because a saved copy may have been rewritten along with the draft.
+async function liveAct(path, body, okMsg) {
+  try {
+    const r = await post(path, { ...body, sid: LIVE_SID });
+    toast(typeof okMsg === "function" ? okMsg(r) : okMsg, "ok");
+    LIVE = null;              // force a full re-read, not an fp comparison
+    await pollLive();
+    await refresh();
+  } catch (e) { toast(e.message, "err"); }
+}
+
+function drawLive() {
+  const d = LIVE;
+  $("livesec").hidden = false;
+  $("livekey").textContent = `${d.agent} · ‹${d.key}›`;
+  const n = d.exchanges.length;
+  const bits = [`${n} exchange${n === 1 ? "" : "s"}`];
+  if (d.pending) bits.push("answer in flight");
+  if (d.edits) bits.push(`${d.edits} live edit${d.edits === 1 ? "" : "s"}`);
+  if (d.stale) bits.push(`${d.stale} ignored (dialog moved)`);
+  if ($("livefull").checked && d.stream === false)
+    bits.push("full output not available for this agent");
+  const stores = `${d.would_store} exchange${d.would_store === 1 ? "" : "s"}`;
+  bits.push(d.saved
+    ? (d.saved.in_sync
+        ? `saved in ${d.saved.checkpoint} ✓`
+        : `saved in ${d.saved.checkpoint} · out of date (a save stores ${stores})`)
+    : `not saved yet (a save stores ${stores})`);
+  $("livemeta").textContent = bits.join(" · ");
+  $("live-follow").textContent = d.sessions.length > 1 ? "following ‹" + d.key + "› ▾" : "this project";
+  $("live-follow").disabled = d.sessions.length < 2;
+  const older = !!(d.newest && d.key !== d.newest);
+  $("live-newest").hidden = !older;
+  if (older) {
+    const mine = (d.sessions || []).find((s) => s.key === d.key);
+    bits.push(mine ? `quiet for ${niceIdle(mine.idle)} · newest is ‹${d.newest}›` : `newest is ‹${d.newest}›`);
+    $("livemeta").textContent = bits.join(" · ");
+  }
+  $("livedot").className = "livedot" + ($("livewatch").checked ? "" : " off");
+  $("live-discard").hidden = RO || !d.edits;
+  drawComposer(d.terminal || {});
+  $("live-save").hidden = RO;
+  $("golive").hidden = false;
+  const host = $("liveex");
+  host.textContent = "";
+  if (!n) host.appendChild(el("div", { class: "empty", text: "No dialog in this session yet." }));
+  const shown = LIVE_ALL ? d.exchanges : d.exchanges.slice(-LIVE_TAIL);
+  const hidden = n - shown.length;
+  if (hidden > 0) {
+    host.appendChild(el("button", { class: "earlier",
+      text: `show ${hidden} earlier exchange${hidden === 1 ? "" : "s"}`,
+      onclick: () => { LIVE_ALL = true; drawLive(); } }));
+  } else if (LIVE_ALL && n > LIVE_TAIL) {
+    host.appendChild(el("button", { class: "earlier", text: `show only the latest ${LIVE_TAIL}`,
+      onclick: () => { LIVE_ALL = false; drawLive(); } }));
+  }
+  shown.forEach((ex) => host.appendChild(liveCard(ex)));
+}
+
+// Where a typed message would land, or why it would not. Never a guess: the
+// server re-checks the pane and the process every poll, so this line is the
+// current truth rather than what was true at session start.
+function drawComposer(term) {
+  const ok = !!term.pane && !RO;
+  $("composer").hidden = RO;
+  $("sayto").textContent = term.pane
+    ? `→ tmux pane ${term.pane}${term.how ? " · " + term.how : ""}`
+    : (term.reason || "no terminal found for this session");
+  $("sayto").className = "to" + (term.pane ? "" : " off");
+  $("say").disabled = !ok;
+  $("say-send").disabled = !ok;
+}
+
+async function say() {
+  const text = $("say").value.trim();
+  if (!text) return;
+  $("say-send").disabled = true;
+  try {
+    const r = await post("/api/live/say", { text, sid: LIVE_SID });
+    $("say").value = "";
+    toast(`sent to ${r.pane}`, "ok");
+    LIVE = null;
+    await pollLive();   // the turn shows up as soon as the agent writes it
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    $("say-send").disabled = false;
+  }
+}
+
+function liveCard(ex) {
+  const card = el("div", { class: "ex" + (ex.dropped ? " dropped" : "") });
+  const head = el("header", {}, el("span", { class: "role", text: "exchange " + ex.index }));
+  if (ex.pending) head.appendChild(el("span", { class: "badge", text: "in flight" }));
+  if (ex.edited) head.appendChild(el("span", { class: "badge", text: "edited" }));
+  if (ex.dropped) head.appendChild(el("span", { class: "badge warn", text: "dropped" }));
+  head.appendChild(el("span", { class: "spacer" }));
+  if (!RO) {
+    if (ex.dropped) {
+      head.appendChild(el("button", { text: "restore", onclick: () =>
+        liveAct("/api/live/restore", { index: ex.index }, `exchange ${ex.index} restored`) }));
+    } else {
+      head.appendChild(el("button", { text: "edit", onclick: () => liveEditCard(card, ex) }));
+      head.appendChild(el("button", { class: "danger", text: "drop", onclick: () =>
+        liveAct("/api/live/drop", { index: ex.index },
+          `exchange ${ex.index} will not be saved`) }));
+    }
+  }
+  card.appendChild(head);
+  if (ex.dropped) {
+    // the point of a drop is that it is gone; one struck line is enough to
+    // recognise it by, and "restore" is right there
+    card.appendChild(el("div", { class: "droppreview",
+      text: String(ex.user).split("\n")[0].trim() }));
+    return card;
+  }
+  const user = el("div", { class: "turn user" }, el("span", { class: "rolechip user", text: "User" }));
+  user.appendChild(md(ex.user));
+  for (const im of ex.images || []) {  // pictures pasted with the question
+    user.appendChild(picture(imageUrl(im.url), `picture ${im.n} (${im.type})`));
+  }
+  card.appendChild(user);
+  const agent = el("div", { class: "turn agent" }, el("span", { class: "rolechip agent", text: "Agent" }));
+  for (const m of String(ex.model || "").split(", ")) if (m) agent.appendChild(modelChip(m));
+  if (ex.parts && ex.parts.length) {
+    // unfiltered: everything the agent emitted, in the order it happened,
+    // with the calls of one reply kept together as the batch they ran as
+    for (let k = 0; k < ex.parts.length; ) {
+      const batch = ex.parts[k].batch;
+      if (!batch) { agent.appendChild(livePart(ex, k, ex.parts[k])); k++; continue; }
+      const run = [];
+      while (k < ex.parts.length && ex.parts[k].batch === batch) { run.push([k, ex.parts[k]]); k++; }
+      agent.appendChild(liveBatch(ex, run));
+    }
+  } else if (ex.agent) {
+    agent.appendChild(md(ex.agent));
+  } else {
+    agent.appendChild(el("p", { class: "empty",
+      text: ex.pending ? "(still answering…)" : "(no textual reply captured)" }));
+  }
+  card.appendChild(agent);
+  return card;
+}
+
+// One emitted block. Text reads as dialog; thinking is dimmed prose; a tool
+// call is its name and most telling argument on one line, with the whole call
+// one click away — shown, not hidden, but not drowning the reading either.
+// Tools the agent asked for in a single reply run at the same time. Shown as
+// one step with a rail down the side, because "three calls in parallel" is a
+// different act from three calls in a row — and the transcript knows which.
+function liveBatch(ex, run) {
+  const size = run[0][1].batch_size || run.length;
+  const box = el("div", { class: "part batch" },
+    el("div", { class: "batchhead",
+      text: run.length === size ? `${size} calls in parallel`
+                                : `${run.length} of ${size} calls in parallel` }));
+  run.forEach(([k, part]) => box.appendChild(livePart(ex, k, part)));
+  return box;
+}
+
+function livePart(ex, k, part) {
+  if (part.kind === "tool") {
+    const key = ex.index + ":" + k;
+    const summary = el("summary", {},
+      el("span", { class: "toolname", text: part.name || "tool" }));
+    if (part.preview) summary.appendChild(el("span", { class: "toolarg", text: part.preview }));
+    if (part.sidechain) summary.appendChild(el("span", { class: "badge", text: "subagent" }));
+    const body = el("pre", {});
+    body.appendChild(highlight(part.text, codeLang("", part.text)));
+    const shot = part.preview && part.preview.startsWith("/") && IMAGE_FILE.test(part.preview);
+    const box = el("details", { class: (shot ? "" : "part ") + "tool", open: LIVE_OPEN.has(key) ? "" : null,
+      ontoggle: (e) => e.currentTarget.open ? LIVE_OPEN.add(key) : LIVE_OPEN.delete(key) },
+      summary, body);
+    if (part.clipped) box.appendChild(el("div", { class: "clip", text: "… clipped" }));
+    if (!shot) return box;
+    // the agent read a picture: show it, not just the path it read
+    return el("div", { class: "part" }, box,
+      picture(imageUrl("/api/image?path=" + encodeURIComponent(part.preview)), part.preview));
+  }
+  const box = el("div", { class: "part " + (part.kind === "thinking" ? "think" : "say") });
+  if (part.kind !== "text" || part.sidechain) {
+    box.appendChild(el("div", { class: "partchip",
+      text: (part.sidechain ? "subagent " : "") + part.kind }));
+  }
+  box.appendChild(md(part.text));
+  if (part.clipped) box.appendChild(el("div", { class: "clip", text: "… clipped" }));
+  return box;
+}
+
+function liveEditCard(card, ex) {
+  LIVE_EDIT = ex.index;  // freezes polling until this editor closes
+  card.textContent = "";
+  card.appendChild(el("header", {}, el("span", { class: "role", text: "editing live exchange " + ex.index })));
+  const u = el("textarea"); u.value = ex.user;
+  const a = el("textarea"); a.value = ex.agent;
+  const close = async (msg, r) => {
+    LIVE_EDIT = null;
+    if (msg) { toast(typeof msg === "function" ? msg(r) : msg, "ok"); await refresh(); }
+    LIVE = null;
+    await pollLive();
+    scheduleLive();
+  };
+  const wrap = el("div", { style: "padding:10px 12px" });
+  wrap.appendChild(el("div", { class: "role", style: "margin-bottom:4px", text: "User" }));
+  wrap.appendChild(u);
+  wrap.appendChild(el("div", { class: "role", style: "margin:10px 0 4px", text: "Agent" }));
+  wrap.appendChild(a);
+  wrap.appendChild(el("div", { class: "row end", style: "margin-top:10px" },
+    el("span", { class: "muted", style: "flex:1;font-size:12px",
+      text: "Stored in the live draft — mh applies it every time this session is saved." }),
+    el("button", { text: "cancel", onclick: () => close() }),
+    el("button", { class: "primary", text: "save", onclick: async () => {
+      try {
+        await post("/api/live/edit", { index: ex.index, user: u.value, agent: a.value, sid: LIVE_SID });
+        await close(`exchange ${ex.index} rewritten`);
+      } catch (e) { toast(e.message, "err"); }
+    } })));
+  card.appendChild(wrap);
+}
+
+function wireLive() {
+  // the shortcut is what the keyboard in front of the page actually has
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  $("say-send").textContent = mac ? "send ⌘⏎" : "send Ctrl+⏎";
+  $("golive").onclick = () => {
+    $("livesec").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!$("say").disabled) $("say").focus({ preventScroll: true });
+  };
+  $("livewatch").onchange = () => {
+    $("livedot").className = "livedot" + ($("livewatch").checked ? "" : " off");
+    if ($("livewatch").checked) runLive(); else clearTimeout(LIVE_TIMER);
+  };
+  $("livefull").onchange = () => { LIVE = null; runLive(); };
+  $("say-send").onclick = say;
+  $("say").addEventListener("keydown", (e) => {
+    // ⌘/ctrl+enter sends; plain enter stays a newline, so a paragraph is one message
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); say(); }
+  });
+  $("live-save").onclick = () =>
+    liveAct("/api/live/save", {}, (r) => `saved ${r.file} -> ${r.checkpoint}`);
+  $("live-discard").onclick = () => {
+    if (!confirm("Discard every live edit for this session?\n\nThe dialog goes back to what the transcript says.")) return;
+    liveAct("/api/live/discard", {}, "live edits discarded");
+  };
+  $("live-follow").onclick = () => {
+    if (!LIVE) return;
+    const label = (s) => `${s.key} · ${s.agent} · ${s.file}`;
+    const bySid = new Map(LIVE.sessions.map((s) => [label(s), s.sid]));
+    menu($("live-follow"), "follow which session…", [...bySid.keys()],
+      "only one transcript in this project", (pick) => {
+        LIVE_SID = bySid.get(pick);
+        LIVE_PINNED = null;  // a deliberate pick is never switched away from
+        LIVE = null;
+        runLive();
+      });
+  };
+  $("live-newest").onclick = () => followNewest();
+  // A background tab should not poll every 2.5s; coming back should not wait.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && $("livewatch").checked) runLive(); else scheduleLive();
+  });
+}
+
 // --- mutations -------------------------------------------------------------
 
 const otherCheckpoints = () => DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
@@ -749,17 +1389,15 @@ function moveSession(s, anchor) {
 
 function wire() {
   $("reload").onclick = $("budget").onchange = () => refresh();
-  $("newckpt").onclick = () => {
-    const name = prompt("New checkpoint name:");
-    if (name) act("/api/checkpoint/create", { name }, "checkpoint created");
-  };
-  $("ck-rename").onclick = () => {
-    const name = prompt("Rename checkpoint to:", SEL_CK);
-    if (!name || name === SEL_CK) return;
-    $("sessec").hidden = true;
-    act("/api/checkpoint/rename", { slug: SEL_CK, name },
-      (r) => `renamed to ${r.slug}`, (r) => { SEL_CK = r.slug; selectCheckpoint(SEL_CK); });
-  };
+  $("newckpt").onclick = () =>
+    ask($("newckpt"), "new checkpoint — it becomes current", "", (name) =>
+      act("/api/checkpoint/create", { name }, (r) => `checkpoint ${r.slug} created`));
+  $("ck-rename").onclick = () =>
+    ask($("ck-rename"), `rename ${SEL_CK} to…`, SEL_CK, (name) => {
+      $("sessec").hidden = true;
+      act("/api/checkpoint/rename", { slug: SEL_CK, name },
+        (r) => `renamed to ${r.slug}`, (r) => { SEL_CK = r.slug; selectCheckpoint(SEL_CK); });
+    });
   $("ck-delete").onclick = () => {
     const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
     if (!confirm(`Delete checkpoint ${SEL_CK} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
@@ -790,6 +1428,7 @@ async function refresh() {
 }
 
 wire();
+wireLive();
 $("budget").value = CFG.budget ?? "";
 $("hubpath").textContent = CFG.hub;
 if (CFG.version) document.title += " · v" + CFG.version;
@@ -799,6 +1438,7 @@ if (RO) {
   $("ckactions").hidden = true;
 }
 refresh().catch((e) => toast(e.message, "err"));
+runLive();
 </script>
 </body>
 </html>

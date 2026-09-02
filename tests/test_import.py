@@ -29,9 +29,7 @@ def _seed_all_agents(ws, root):
         home,
         root,
         PI_SID,
-        make_pi_records(
-            [("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)
-        ),
+        make_pi_records([("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)),
     )
     write_pi_transcript(
         home,
@@ -40,9 +38,7 @@ def _seed_all_agents(ws, root):
         make_pi_records([], start="2026-07-05T04:00:00Z", cwd=str(root)),
         stamp_name="2026-07-05T04-00-00-000Z",
     )
-    write_codex_rollout(
-        home, root, CX_SID, [("cx-q", "cx-a")], start="2026-07-03T04:00:00Z"
-    )
+    write_codex_rollout(home, root, CX_SID, [("cx-q", "cx-a")], start="2026-07-03T04:00:00Z")
     write_codex_rollout(
         home,
         root,
@@ -70,9 +66,7 @@ def test_import_all_agents_dry_run_then_real(mh, ws, hub_project):
     assert "1 with no dialog" in p.stdout
 
     hist = next(
-        d
-        for d in (root / ".memoryhub" / "checkpoints").iterdir()
-        if d.name.endswith("_history")
+        d for d in (root / ".memoryhub" / "checkpoints").iterdir() if d.name.endswith("_history")
     )
     names = sorted(f.name for f in hist.glob("*.md"))
     # pi/codex fixtures end with a junk record at 04:02 — the session end time
@@ -119,9 +113,7 @@ def test_import_dedups_against_mh_save_and_agent_filter(mh, ws, hub_project):
         home,
         root,
         PI_SID,
-        make_pi_records(
-            [("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)
-        ),
+        make_pi_records([("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)),
     )
 
     p = mh("import", "--agent", "pi", cwd=root, check=0)
@@ -146,15 +138,12 @@ def test_import_to_targets_named_checkpoint(mh, ws, hub_project):
         ws["home"],
         root,
         PI_SID,
-        make_pi_records(
-            [("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)
-        ),
+        make_pi_records([("pi-q", "pi-a")], start="2026-07-02T04:00:00Z", cwd=str(root)),
     )
     p = mh("import", "--to", "alpha", cwd=root, check=0)
     assert "-> alpha (pi 1)" in p.stdout
     assert not any(
-        d.name.endswith("_history")
-        for d in (root / ".memoryhub" / "checkpoints").iterdir()
+        d.name.endswith("_history") for d in (root / ".memoryhub" / "checkpoints").iterdir()
     )
 
 
@@ -166,16 +155,12 @@ def test_import_subdir_variant_needs_matching_cwd(mh, ws, hub_project):
     # subdir launch: cwd under the project root -> accepted
     dump_jsonl(
         base / (esc + "-src") / f"{CL_SID}.jsonl",
-        make_records(
-            [("sub-q", "sub-a")], start="2026-07-01T04:00:00Z", cwd=str(root / "src")
-        ),
+        make_records([("sub-q", "sub-a")], start="2026-07-01T04:00:00Z", cwd=str(root / "src")),
     )
     # sibling project: prefix-matches the dir name but cwd is elsewhere -> rejected
     dump_jsonl(
         base / (esc + "-2") / f"{CX_SID}.jsonl",
-        make_records(
-            [("sib-q", "sib-a")], start="2026-07-01T04:00:00Z", cwd="/somewhere/else"
-        ),
+        make_records([("sib-q", "sib-a")], start="2026-07-01T04:00:00Z", cwd="/somewhere/else"),
     )
     p = mh("import", cwd=root, check=0)
     assert "imported 1 sessions -> history (claude 1)" in p.stdout
@@ -195,9 +180,7 @@ def test_import_scoped_to_cwd_subtree(mh, ws, hub_project):
     )
     dump_jsonl(
         base / (esc + "-sub") / f"{sids[1]}.jsonl",
-        make_records(
-            [("sub-q", "a")], start="2026-07-02T04:00:00Z", cwd=str(root / "sub")
-        ),
+        make_records([("sub-q", "a")], start="2026-07-02T04:00:00Z", cwd=str(root / "sub")),
     )
     dump_jsonl(
         base / (esc + "-sub-deep") / f"{sids[2]}.jsonl",
@@ -209,9 +192,7 @@ def test_import_scoped_to_cwd_subtree(mh, ws, hub_project):
     )
     dump_jsonl(
         base / (esc + "-other") / f"{sids[3]}.jsonl",
-        make_records(
-            [("other-q", "a")], start="2026-07-04T04:00:00Z", cwd=str(root / "other")
-        ),
+        make_records([("other-q", "a")], start="2026-07-04T04:00:00Z", cwd=str(root / "other")),
     )
 
     sub = root / "sub"

@@ -8,17 +8,18 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 
+from . import __version__, curate, git, purify
 from . import agents as agents_mod
 from . import checkpoint as ck
-from . import curate, git
 from . import hooks as hooksmod
 from . import hub as hubmod
+from . import live as livemod
 from . import load as loadmod
-from . import purify
+from . import relay as relaymod
+from . import save as savemod
 from .hub import MhError
 
 app = typer.Typer(
@@ -37,16 +38,10 @@ JSON_OPT = typer.Option(False, "--json", help="Machine-readable output.")
 def _print_version(value: bool):
     if not value:
         return
-    try:
-        from importlib.metadata import version as pkg_version
-
-        v = pkg_version("memoryhub")
-    except Exception:
-        v = "unknown"
     # The path answers the classic support question — a snapshot install lives
     # under the tool dir and silently ignores `git pull`; an editable install
     # points into the working tree.
-    print(f"mh {v} ({Path(__file__).resolve().parent})")
+    print(f"mh {__version__} ({Path(__file__).resolve().parent})")
     raise typer.Exit()
 
 
@@ -101,9 +96,7 @@ def _emit_json(obj) -> None:
 @app.command()
 @guard
 def init(
-    global_: bool = typer.Option(
-        False, "--global", help="Create the global hub at ~/.memoryhub."
-    ),
+    global_: bool = typer.Option(False, "--global", help="Create the global hub at ~/.memoryhub."),
     claude: bool = typer.Option(
         False, "--claude", help="Append the Memory section to the project CLAUDE.md."
     ),
@@ -151,9 +144,15 @@ def checkpoint(
 
 def _resolve_session(hub: Path, session_id, transcript):
     """(source, session id, identity key, turns, last timestamp, per-turn
-    models) for the session being saved. Shared by the purified and compacted
-    paths so both land under the same identity — a compacted save replaces a
-    purified one, and vice versa, instead of duplicating the session."""
+    models, live edits applied) for the session being saved. Shared by the
+    purified and compacted paths so both land under the same identity — a
+    compacted save replaces a purified one, and vice versa, instead of
+    duplicating the session.
+
+    Edits made to this session while it ran (the `mh ui` live panel) are folded
+    in here, so every save path applies them: that is what stops a later save
+    from resurrecting dialog the user already curated away.
+    """
     root = hubmod.project_root_of(hub)
     sid_opt = session_id or os.environ.get("CLAUDE_CODE_SESSION_ID")
     if transcript:
@@ -172,22 +171,19 @@ def _resolve_session(hub: Path, session_id, transcript):
         src = max(candidates, key=lambda d: d.path.stat().st_mtime).path
         agent_name = agents_mod.detect_agent(src)
     sid, key = agents_mod.identify(agent_name, src)
-    turns, last_ts, models = agents_mod.extract(
-        agents_mod.Discovered(agent_name, src, sid, key)
-    )
-    return src, sid, key, turns, last_ts, models
+    turns, last_ts, models = agents_mod.extract(agents_mod.Discovered(agent_name, src, sid, key))
+    turns, models, applied, _stale = livemod.apply(turns, models, livemod.read_draft(hub, key))
+    return src, sid, key, turns, last_ts, models, applied
 
 
 @app.command()
 @guard
 def save(
-    checkpoint_ref: Optional[str] = typer.Argument(
+    checkpoint_ref: str | None = typer.Argument(
         None, metavar="[CHECKPOINT]", help="Target checkpoint (same as --to)."
     ),
-    to: Optional[str] = typer.Option(
-        None, "--to", help="Target checkpoint (default: current)."
-    ),
-    file: Optional[Path] = typer.Option(
+    to: str | None = typer.Option(None, "--to", help="Target checkpoint (default: current)."),
+    file: Path | None = typer.Option(
         None, "--file", help="Ingest an already-purified markdown file."
     ),
     compact: bool = typer.Option(
@@ -195,10 +191,10 @@ def save(
         "--compact",
         help="Store an agent-written summary of this session (needs --file).",
     ),
-    session_id: Optional[str] = typer.Option(
+    session_id: str | None = typer.Option(
         None, "--session-id", help="Purify a specific session id."
     ),
-    transcript: Optional[Path] = typer.Option(
+    transcript: Path | None = typer.Option(
         None, "--transcript", help="Purify an explicit .jsonl transcript."
     ),
     json_: bool = JSON_OPT,
@@ -210,15 +206,11 @@ def save(
         raise MhError(f"two target checkpoints given: '{checkpoint_ref}' and '{to}'")
     ref = to or checkpoint_ref
     if ref:
-        target = ck.resolve(hub, ref)
-    else:
-        current = hubmod.read_current(hub)
-        if not current:
-            raise MhError(
-                "no current checkpoint (run 'mh checkpoint <name>' or 'mh goto <ckpt>')"
-            )
-        target = ck.resolve(hub, current)
+        ck.resolve(hub, ref)  # a bad name fails before the transcript is read
+    elif not hubmod.read_current(hub):
+        raise MhError("no current checkpoint (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
 
+    applied = 0  # live edits folded in; the --file branch stores a given document
     if compact:
         # mh has no model of its own: the agent driving the session writes the
         # summary and hands it over. Without one there is nothing to compact,
@@ -235,7 +227,7 @@ def save(
         summary = file.read_text(encoding="utf-8").strip()
         if not summary:
             raise MhError(f"{file} is empty — nothing to compact")
-        src, sid, key, turns, last_ts, models = _resolve_session(
+        src, sid, key, turns, last_ts, models, applied = _resolve_session(
             hub, session_id, transcript
         )
         # count what a purified save of this session would hold, so the two
@@ -247,14 +239,10 @@ def save(
         if not file.is_file():
             raise MhError(f"file not found: {file}")
         body = file.read_text(encoding="utf-8")
-        stamp = (
-            datetime.fromtimestamp(file.stat().st_mtime)
-            .astimezone()
-            .strftime(ck.STAMP_FMT)
-        )
+        stamp = datetime.fromtimestamp(file.stat().st_mtime).astimezone().strftime(ck.STAMP_FMT)
         key = ck.slugify(file.stem)[:40]
     else:
-        src, sid, key, turns, last_ts, models = _resolve_session(
+        src, sid, key, turns, last_ts, models, applied = _resolve_session(
             hub, session_id, transcript
         )
         turns, models = purify.drop_trailing_unanswered(turns, models)
@@ -263,7 +251,10 @@ def save(
         body = purify.render(turns, str(src), sid, models)
         stamp = purify.stamp_for(last_ts, src)
 
-    fname = ck.save_session(hub, target, body, key, stamp)
+    # An explicit `mh save` may replace a compacted summary with the dialog;
+    # the automatic paths (hook, panel) never do.
+    stored = savemod.store(hub, key, body, stamp, ref, replace_compacted=True)
+    target, fname = stored.checkpoint, stored.file
     count = len(ck.resolve(hub, target.slug).sessions)
     if json_:
         _emit_json(
@@ -272,19 +263,25 @@ def save(
                 "file": fname,
                 "path": str(target.path / fname),
                 "sessions": count,
+                "live_edits": applied,
+                "moved_from": stored.moved_from,
             }
         )
     else:
         print(f"saved {fname} -> {target.slug} ({count} sessions)")
+        if stored.moved_from:
+            print(f"(moved from {stored.moved_from} — a session lives in one checkpoint)")
+        if applied:
+            print(f"({applied} live edit{'' if applied == 1 else 's'} applied)")
 
 
 @app.command("import")
 @guard
 def import_(
-    to: Optional[str] = typer.Option(
+    to: str | None = typer.Option(
         None, "--to", help="Target checkpoint (default: 'history', created if missing)."
     ),
-    agent: Optional[list[str]] = typer.Option(
+    agent: list[str] | None = typer.Option(
         None,
         "--agent",
         help="Limit to specific agents (claude, pi, codex). Repeatable.",
@@ -294,7 +291,7 @@ def import_(
     ),
     json_: bool = JSON_OPT,
 ):
-    """Backfill: discover this project's past sessions across all agents and import them into a checkpoint."""
+    """Backfill: import this project's past sessions (every agent) into a checkpoint."""
     hub = _hub()
     _announce(hub)
     root = hubmod.project_root_of(hub)
@@ -329,9 +326,7 @@ def import_(
     for d, *_ in items:
         counts[d.agent] = counts.get(d.agent, 0) + 1
     breakdown = ", ".join(f"{a} {n}" for a, n in sorted(counts.items()))
-    skip_note = (
-        f"skipped: {skipped_existing} already in hub, {skipped_empty} with no dialog"
-    )
+    skip_note = f"skipped: {skipped_existing} already in hub, {skipped_empty} with no dialog"
 
     if dry_run:
         if json_:
@@ -441,7 +436,7 @@ def rm(
     ref: str = typer.Argument(
         ..., metavar="CKPT[/SESSION]", help="Checkpoint, or checkpoint/session-file (prefix ok)."
     ),
-    exchange: Optional[int] = typer.Option(
+    exchange: int | None = typer.Option(
         None, "--exchange", "-x", help="Delete one exchange (1-based) instead of the whole session."
     ),
     force: bool = typer.Option(
@@ -522,12 +517,12 @@ def rename(
 def edit(
     ref: str = typer.Argument(..., metavar="CKPT/SESSION", help="Session to edit (prefix ok)."),
     exchange: int = typer.Option(..., "--exchange", "-x", help="Exchange to rewrite (1-based)."),
-    user: Optional[str] = typer.Option(None, "--user", help="New user side."),
-    agent: Optional[str] = typer.Option(None, "--agent", help="New agent side."),
-    user_file: Optional[Path] = typer.Option(
+    user: str | None = typer.Option(None, "--user", help="New user side."),
+    agent: str | None = typer.Option(None, "--agent", help="New agent side."),
+    user_file: Path | None = typer.Option(
         None, "--user-file", help="Read the new user side from a file."
     ),
-    agent_file: Optional[Path] = typer.Option(
+    agent_file: Path | None = typer.Option(
         None, "--agent-file", help="Read the new agent side from a file."
     ),
     json_: bool = JSON_OPT,
@@ -568,10 +563,7 @@ def _set_current(hub: Path, target: ck.Checkpoint) -> None:
     hubmod.write_current(hub, target.slug)
     cps = ck.list_checkpoints(hub)
     idx = next(i for i, c in enumerate(cps) if c.slug == target.slug)
-    print(
-        f"now at '{target.slug}' ({len(target.sessions)} sessions) — "
-        f"{idx + 1} of {len(cps)}"
-    )
+    print(f"now at '{target.slug}' ({len(target.sessions)} sessions) — {idx + 1} of {len(cps)}")
 
 
 def _walk(delta: int) -> None:
@@ -585,9 +577,7 @@ def _walk(delta: int) -> None:
         raise MhError("no current checkpoint (run 'mh goto <ckpt>')")
     idx = next((i for i, c in enumerate(cps) if c.slug == current), None)
     if idx is None:
-        raise MhError(
-            f"current checkpoint '{current}' no longer exists (run 'mh goto <ckpt>')"
-        )
+        raise MhError(f"current checkpoint '{current}' no longer exists (run 'mh goto <ckpt>')")
     target_idx = idx + delta
     if target_idx < 0:
         raise MhError("already at the oldest checkpoint")
@@ -625,9 +615,7 @@ def goto(ref: str = typer.Argument(..., help="Checkpoint slug, prefix, or index.
 @app.command()
 @guard
 def load(
-    refs: Optional[list[str]] = typer.Argument(
-        None, help="Checkpoints to load (default: current)."
-    ),
+    refs: list[str] | None = typer.Argument(None, help="Checkpoints to load (default: current)."),
     no_links: bool = typer.Option(False, "--no-links", help="Do not follow links."),
     budget: int = typer.Option(
         loadmod.DEFAULT_BUDGET,
@@ -637,7 +625,7 @@ def load(
     all_: bool = typer.Option(False, "--all", help="No budget: load everything."),
     json_: bool = JSON_OPT,
 ):
-    """Emit the warm-start context pack: selected checkpoints (+ linked), sessions merged by time."""
+    """Emit the warm-start context pack: selected checkpoints (+ linked), merged by time."""
     hub = _hub()
     result = loadmod.build(
         hub,
@@ -711,9 +699,7 @@ def list_(json_: bool = JSON_OPT):
     )
     for i, c in enumerate(cps):
         marker = "*" if c.slug == current else " "
-        created = (
-            f"{c.created[:10]} {c.created[11:13]}:{c.created[13:15]}:{c.created[15:17]}"
-        )
+        created = f"{c.created[:10]} {c.created[11:13]}:{c.created[13:15]}:{c.created[15:17]}"
         newest = _newest_stamp(c)
         last = _stamp_display(newest) if newest else "—"
         partners = ", ".join(ck.partners_of(c.slug, links))
@@ -726,9 +712,7 @@ def list_(json_: bool = JSON_OPT):
 @app.command()
 @guard
 def show(
-    ref: str = typer.Argument(
-        ..., help="Checkpoint, or checkpoint/session-file (prefix ok)."
-    ),
+    ref: str = typer.Argument(..., help="Checkpoint, or checkpoint/session-file (prefix ok)."),
     json_: bool = JSON_OPT,
 ):
     """Print a checkpoint's sessions (or one session file) verbatim."""
@@ -791,6 +775,9 @@ def status(json_: bool = JSON_OPT):
 
     cur_ck = next((c for c in cps if c.slug == current), None)
     closure_slugs = sorted(ck.closure({cur_ck.slug}, links)) if cur_ck else []
+    from . import server
+
+    ui_rec = server.running(hub)
 
     if json_:
         _emit_json(
@@ -806,6 +793,7 @@ def status(json_: bool = JSON_OPT):
                 "days_since_save": days,
                 "stale": bool(days is not None and days > 7),
                 "origin": origin,
+                "ui": ui_rec["url"] if ui_rec else None,
             }
         )
         return
@@ -813,10 +801,7 @@ def status(json_: bool = JSON_OPT):
     print(f"hub: {hub}")
     if cur_ck:
         pos = cps.index(cur_ck) + 1
-        print(
-            f"current: {cur_ck.slug} ({pos} of {len(cps)}) — "
-            f"{len(cur_ck.sessions)} sessions"
-        )
+        print(f"current: {cur_ck.slug} ({pos} of {len(cps)}) — {len(cur_ck.sessions)} sessions")
         others = [s for s in closure_slugs if s != cur_ck.slug]
         if others:
             n_sessions = sum(len(c.sessions) for c in cps if c.slug in closure_slugs)
@@ -827,6 +812,8 @@ def status(json_: bool = JSON_OPT):
     else:
         print("current: none (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
     print(f"checkpoints: {len(cps)} · sessions: {total_sessions} · links: {len(links)}")
+    if ui_rec:
+        print(f"ui: {ui_rec['url']} (pid {ui_rec['pid']}, background — mh ui --stop ends it)")
     if newest:
         age = "today" if days == 0 else f"{days} day{'s' if days != 1 else ''} ago"
         stale = " — stale (>7 days)" if days is not None and days > 7 else ""
@@ -904,22 +891,20 @@ def sync():
     try:
         git.run(hub, "remote", "get-url", "origin")
     except git.GitError:
-        raise MhError(
-            f"no remote configured. run: git -C {hub} remote add origin <url>"
-        )
+        raise MhError(f"no remote configured. run: git -C {hub} remote add origin <url>") from None
     if git.is_dirty(hub):
         raise MhError(
             f"hub has uncommitted manual edits. commit them first: "
             f"git -C {hub} add -A && git -C {hub} commit -m 'manual edits'"
         )
     branch = git.run(hub, "branch", "--show-current").strip() or "main"
-    if git.run(hub, "ls-remote", "--heads", "origin", branch).strip():
-        if git.passthrough(hub, "pull", "--rebase", "origin", branch) != 0:
-            git.run(hub, "rebase", "--abort", check=False)
-            raise MhError(
-                f"sync hit a conflict; hub restored to your local state. "
-                f"resolve manually: git -C {hub} pull --rebase origin {branch}"
-            )
+    upstream = git.run(hub, "ls-remote", "--heads", "origin", branch).strip()
+    if upstream and git.passthrough(hub, "pull", "--rebase", "origin", branch) != 0:
+        git.run(hub, "rebase", "--abort", check=False)
+        raise MhError(
+            f"sync hit a conflict; hub restored to your local state. "
+            f"resolve manually: git -C {hub} pull --rebase origin {branch}"
+        )
     if git.passthrough(hub, "push", "-u", "origin", branch) != 0:
         raise MhError("push failed (see git output above)")
     print("sync complete")
@@ -951,22 +936,53 @@ def hubs(
 @app.command()
 @guard
 def ui(
-    port: int = typer.Option(7777, "--port", help="Port to bind (0 picks a free one)."),
+    port: int | None = typer.Option(
+        None,
+        "--port",
+        help="Port to bind. Default: 7777 when free, else any free port; 0 picks a free one.",
+    ),
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
     browser: bool = typer.Option(True, "--browser/--no-browser", help="Open a browser."),
-    read_only: bool = typer.Option(
-        False, "--read-only", help="Serve the map without any editing."
-    ),
+    read_only: bool = typer.Option(False, "--read-only", help="Serve the map without any editing."),
     budget: str = typer.Option(
         str(loadmod.DEFAULT_BUDGET),
         "--budget",
         help="Initial token budget in the map ('none' for no budget).",
     ),
+    detach: bool = typer.Option(
+        False,
+        "--detach",
+        "-d",
+        help="Run the server in the background and print its URL; `mh ui --stop` ends it.",
+    ),
+    stop: bool = typer.Option(False, "--stop", help="Stop the background server."),
+    session: str | None = typer.Option(
+        None,
+        "--session",
+        help="Session the live panel follows (id or key). Default: $CLAUDE_CODE_SESSION_ID.",
+    ),
 ):
     """Open the checkpoint map: visualize the hub and curate it in a browser."""
+    import webbrowser
+
     from . import server
 
     hub = _hub()
+    if stop:
+        rec = server.stop(hub)
+        print(f"stopped mh ui (pid {rec['pid']})" if rec else "no background mh ui is running")
+        return
+    # From inside an agent session the panel follows the session that asked,
+    # not merely the newest transcript of the project.
+    sid = session or os.environ.get("CLAUDE_CODE_SESSION_ID") or None
+    rec = server.running(hub)
+    if rec:
+        url = server.page_url(rec["url"], sid)
+        print(f"mh ui: {url}")
+        print(f"already running in the background (pid {rec['pid']}) — mh ui --stop ends it")
+        if browser:
+            webbrowser.open(url)
+        return
     budget_value: int | None
     if budget.strip().lower() == "none":
         budget_value = None
@@ -974,7 +990,9 @@ def ui(
         try:
             budget_value = int(budget)
         except ValueError:
-            raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
+            raise MhError(
+                f"--budget must be a non-negative integer or 'none', got '{budget}'"
+            ) from None
         if budget_value < 0:
             raise MhError(f"--budget must be a non-negative integer or 'none', got '{budget}'")
     if host not in server.ALLOWED_HOSTS:
@@ -987,7 +1005,16 @@ def ui(
             f"To use the map from another machine: ssh -L {p}:127.0.0.1:{p} <this-host>",
             file=sys.stderr,
         )
-    server.serve(hub, host=host, port=port, open_browser=browser, read_only=read_only, budget=budget_value)
+    server.serve(
+        hub,
+        host=host,
+        port=port,
+        open_browser=browser,
+        read_only=read_only,
+        budget=budget_value,
+        detach=detach,
+        sid=sid,
+    )
 
 
 # --- hooks -------------------------------------------------------------------
@@ -997,7 +1024,7 @@ def ui(
 # latter snapshotting dialog right before compaction would destroy it.
 
 
-def _hook_hub(payload: dict) -> Optional[Path]:
+def _hook_hub(payload: dict) -> Path | None:
     """The hub for a hook invocation, or None when this project has none —
     hooks may be installed user-wide, so absence is normal, never an error."""
     cwd = payload.get("cwd")
@@ -1010,16 +1037,6 @@ def _hook_hub(payload: dict) -> Optional[Path]:
         return hubmod.discover(start)
     except MhError:
         return None
-
-
-def _existing_by_key(hub: Path, key: str):
-    """(checkpoint, path) of the session already holding this identity key
-    anywhere in the hub, or (None, None)."""
-    for c in ck.list_checkpoints(hub):
-        for p in c.sessions:
-            if ck.session_key(p.name) == key:
-                return c, p
-    return None, None
 
 
 @hook_app.command("save")
@@ -1038,11 +1055,6 @@ def hook_save():
     if hub is None:
         return
     try:
-        current = hubmod.read_current(hub)
-        if not current:
-            print("mh hook save: no current checkpoint — skipped", file=sys.stderr)
-            return
-        target = ck.resolve(hub, current)
         transcript = payload.get("transcript_path")
         transcript = (
             Path(transcript)
@@ -1051,30 +1063,21 @@ def hook_save():
         )
         sid_raw = payload.get("session_id")
         sid_hint = sid_raw if isinstance(sid_raw, str) and sid_raw else None
-        src, sid, key, turns, last_ts, models = _resolve_session(
+        src, sid, key, turns, last_ts, models, applied = _resolve_session(
             hub, None if transcript else sid_hint, transcript
         )
         turns, models = purify.drop_trailing_unanswered(turns, models)
         if not turns:
             print(f"mh hook save: no dialog in {src.name} — skipped", file=sys.stderr)
             return
-        existing_ck, existing_path = _existing_by_key(hub, key)
-        if existing_path is not None:
-            parsed = curate.parse(
-                existing_path.read_text(encoding="utf-8", errors="replace")
-            )
-            if parsed and parsed.compacted:
-                print(
-                    f"mh hook save: {existing_ck.slug}/{existing_path.name} is a "
-                    "compacted save — kept as is",
-                    file=sys.stderr,
-                )
-                return
-            target = existing_ck  # the session was routed there on purpose
         body = purify.render(turns, str(src), sid, models)
         stamp = purify.stamp_for(last_ts, src)
-        fname = ck.save_session(hub, target, body, key, stamp)
-        print(f"mh: saved {fname} -> {target.slug}")
+        # No target: the session is updated where it already lives (a mid-
+        # session `mh save --to` routed it there on purpose), else stored in
+        # the current checkpoint. A compacted save is kept, and says so.
+        stored = savemod.store(hub, key, body, stamp, None, replace_compacted=False, note="hook")
+        note = f" ({applied} live edits applied)" if applied else ""
+        print(f"mh: saved {stored.file} -> {stored.checkpoint.slug}{note}")
     except MhError as e:
         print(f"mh hook save: {e.message} — skipped", file=sys.stderr)
     except git.GitError as e:
@@ -1099,10 +1102,14 @@ def hook_load(
     exits 0 quietly.
     """
     payload = hooksmod.read_payload()
-    if payload.get("source") in ("resume", "compact"):
-        return
     hub = _hook_hub(payload)
     if hub is None:
+        return
+    # Which tmux pane this session lives in, so `mh ui` can type into it. Done
+    # before the resume check: a resumed session has its context already, but
+    # it still moved to a new pane.
+    relaymod.record_from_hook(hub, payload)
+    if payload.get("source") in ("resume", "compact"):
         return
     try:
         result = loadmod.build(hub, None, follow_links=True, budget=None if all_ else budget)
@@ -1158,33 +1165,29 @@ def hook_install(
 @skill_app.command("install")
 @guard
 def skill_install():
-    """Install the mh skill for Claude Code, and for pi when present."""
+    """Install the mh skills for Claude Code, and for pi when present."""
     from importlib.resources import files
 
-    content = files("memoryhub").joinpath("skill/SKILL.md").read_text(encoding="utf-8")
+    # `mh` is the workflow; `mh-ui` is one paragraph that only starts the map,
+    # so a session that wants the map does not pay for the whole workflow.
+    skills = {
+        "mh": files("memoryhub").joinpath("skill/SKILL.md").read_text(encoding="utf-8"),
+        "mh-ui": files("memoryhub").joinpath("skill/ui/SKILL.md").read_text(encoding="utf-8"),
+    }
     targets = [
-        (
-            "claude",
-            Path.home() / ".claude" / "skills" / "mh" / "SKILL.md",
-            (Path.home() / ".claude").is_dir(),
-        ),
-        (
-            "pi",
-            Path.home() / ".pi" / "agent" / "skills" / "mh" / "SKILL.md",
-            (Path.home() / ".pi" / "agent").is_dir(),
-        ),
+        ("claude", Path.home() / ".claude" / "skills", (Path.home() / ".claude").is_dir()),
+        ("pi", Path.home() / ".pi" / "agent" / "skills", (Path.home() / ".pi" / "agent").is_dir()),
     ]
     installed = 0
-    for name, dest, present in targets:
+    for name, root, present in targets:
         if not present:
             print(f"{name}: not detected — skipped")
             continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(content, encoding="utf-8")
+        for skill, content in skills.items():
+            dest = root / skill / "SKILL.md"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+            print(f"installed skill ({name}) -> {dest}")
         installed += 1
-        print(f"installed skill ({name}) -> {dest}")
     if not installed:
-        print(
-            "no agent detected (no ~/.claude or ~/.pi/agent) — start the agent "
-            "once, then rerun"
-        )
+        print("no agent detected (no ~/.claude or ~/.pi/agent) — start the agent once, then rerun")

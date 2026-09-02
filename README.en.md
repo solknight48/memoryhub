@@ -77,7 +77,7 @@ $ mh load                        # sessions of BOTH, merged in time order
 | `mh status` / `mh log` | Position and counts / the hub's git journal. |
 | `mh sync` | `pull --rebase` + `push` to `origin`; conflicts auto-abort. |
 | `mh hubs [--prune]` | All registered hubs. |
-| `mh ui [--port N] [--budget N\|none] [--read-only]` | Open the checkpoint map in a browser and curate the hub. |
+| `mh ui [--port N] [--budget N\|none] [--read-only] [--detach] [--stop] [--session ID]` | Open the checkpoint map in a browser and curate the hub. |
 | `mh hook install [--user] [--remove]` | Automate load/save through Claude Code hooks. |
 | `mh skill install` | Install the Claude Code skill. |
 
@@ -88,11 +88,15 @@ session's transcript, pairs each user turn with the assistant text that follows,
 strips everything that isn't dialog (thinking blocks, tool calls and results,
 subagent traffic, `<system-reminder>`, harness wrappers, interrupted turns),
 drops the trailing question that triggered the save, then writes
-`<end-time>_<session-key>.md` and commits.
+`<end-time>_<session-key>.md` and commits. A slash command the agent answered —
+`/mh load` — is kept as you typed it; one nobody answered (`/clear`, `/model`) is
+harness noise and goes.
 
 The timestamp is the session's **end** time, so time-merged loading reflects when
-work actually happened. One file per session per checkpoint: re-saving replaces,
-never duplicates.
+work actually happened. A session lives in exactly one checkpoint: re-saving
+replaces, never duplicates — even after the current pointer has moved on, a plain
+`mh save` updates the session where it already is, and `mh save --to <ckpt>` moves
+it. The hooks and the map's save button follow the same rule.
 
 `mh save --compact --file <md>` stores a summary instead of the full dialog.
 **mh does not summarize by itself** — it has no model and makes no network calls;
@@ -131,6 +135,15 @@ $ mh ui
 mh ui: http://127.0.0.1:7777/?t=<a fresh token, minted per run>
 ```
 
+`mh ui --detach` starts the server in the background and prints the URL; that is
+what `/mh ui` runs from inside an agent session, with the live panel pinned to
+the session that asked (`$CLAUDE_CODE_SESSION_ID`). The pin holds only while
+that session lives: quiet for ten minutes with a newer transcript in the
+project, and the page follows the newest instead — saying so. Run it again and
+it prints the running server's URL; `mh ui --stop` ends it; `mh status` shows it.
+`mh skill install` also installs **`/mh-ui`**, a one-paragraph skill that does
+only this — about 150 tokens of context instead of the whole `/mh` workflow.
+
 A checkpoint timeline: nodes sized by session count, links drawn as arcs, the
 current pointer ringed, and the sessions the next `mh load` would include picked
 out at your token budget. Click through to **delete or rewrite a single
@@ -139,6 +152,39 @@ Every change is a commit in the hub, so `git -C .memoryhub revert` is the undo.
 `--read-only` serves the map with all editing hidden. The same surgery works
 from a terminal — `mh rm`, `mh mv`, `mh rename`, `mh edit` — so an agent can
 curate memory on request without a browser.
+
+Under the map sits the **live session**: the transcript the agent is writing
+right now, re-read whenever it grows, so what you type in the terminal shows up
+in the browser a breath later. The feed shows the newest three exchanges — the
+rest are one click away, so the map is never buried under a long session. It shows the session **unfiltered** — thinking, visible text and every tool
+call in the order the agent emitted them, the calls of one reply gathered
+under a rail as the parallel batch they ran as, a subagent's output labelled
+as its own — because while you are watching a session happen, the tool calls are the
+session. Pictures show too: one you pasted into the session, or a screenshot the
+agent read, appears under the turn — served by mh from the transcript or the
+file, never copied into the hub. (What gets *stored* is still purified dialog;
+the panel's `full output` box turns the raw stream off.) You can curate it while it runs — drop
+an exchange, rewrite an answer, restore either. Those decisions are kept as a draft
+beside the hub (`.memoryhub/drafts/`, untracked, never in the journal) and
+applied by *every* save of that session: `mh save`, the SessionEnd/PreCompact
+hook, and the panel's own save button. So what you curate mid-session does not
+come back when the session is finally stored, and dialog that arrives after you
+curated it still does. The question the agent is still answering is shown but
+never stored, exactly as `mh save` has always dropped it.
+
+You can also **type back**. The composer sits at the bottom of the panel, pinned
+to the window while the feed is in view. It does not fake a reply — mh has no model. It pastes what you wrote into the tmux pane the
+session is running in, exactly as if you had typed it there, and the agent's
+answer comes back through the transcript like any other turn. The pane is not
+guessed: `mh hook load` records it at session start (tmux exports `TMUX_PANE`
+into the hook), and every send re-checks that the pane is still there and that
+the same agent is still alive inside it — a pane whose session has exited is
+refused, never pasted into. Sessions outside tmux say so instead: open one with
+`tmux new -s mh`, run `claude` inside it, and the composer lights up. Start tmux
+as a shell, not as `tmux new -s mh claude` — that pane closes the moment claude
+quits and takes the tmux session with it; a shell pane outlives `claude -c`
+restarts, and mh recognises the agent that comes back in it. Typing back is
+Linux-only for now — mh reads `/proc` to prove the pane still holds the agent.
 
 Safety: loopback-only, a one-shot token minted per run, and the `Host` header
 checked; the page is self-contained and works offline. **mh will not rewrite a
@@ -187,8 +233,12 @@ re-running later picks up only what's new.
 git clone https://github.com/solknight48/memoryhub
 cd memoryhub
 uv run pytest                  # full E2E suite, subprocess CLI in a hermetic HOME
+uv run ruff check && uv run ruff format --check   # what CI runs
 uv tool install --force -e .   # so the installed mh is the code you are editing
 ```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the invariants a change must keep;
+[CHANGELOG.md](CHANGELOG.md) what changed when.
 
 `purify.py` is vendored from the `purify-context` skill, with a parity test
 pinning extraction semantics to it. `curate.py` is the only code that parses

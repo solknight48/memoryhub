@@ -31,6 +31,9 @@ def test_skill_install(mh, ws, project):
     assert dest.is_file()
     assert "name: mh" in dest.read_text()
     assert str(dest) in p.stdout
+    ui_dest = ws["home"] / ".claude" / "skills" / "mh-ui" / "SKILL.md"
+    assert "name: mh-ui" in ui_dest.read_text()  # the one-paragraph map starter
+    assert "mh ui --detach" in ui_dest.read_text()
     assert "pi: not detected — skipped" in p.stdout  # no ~/.pi/agent in this HOME
 
     (ws["home"] / ".pi" / "agent").mkdir(parents=True)

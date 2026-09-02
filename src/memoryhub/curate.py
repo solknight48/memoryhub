@@ -79,9 +79,7 @@ def readonly_reason(parsed: ParsedSession | None) -> str | None:
     return None
 
 
-def render_compacted(
-    summary: str, source: str, session_id: str | None, exchanges: int
-) -> str:
+def render_compacted(summary: str, source: str, session_id: str | None, exchanges: int) -> str:
     """A summary the agent wrote, wrapped in mh's session document shape."""
     src = os.path.basename(source)
     prov = f"`{src}`" + (f" (session `{session_id}`)" if session_id else "")
@@ -251,9 +249,7 @@ def parse(text: str) -> ParsedSession | None:
 def _render_as_parsed(parsed: ParsedSession) -> str:
     """Re-render in the shape it was parsed from — this is the round-trip check."""
     if parsed.compacted:
-        return render_compacted(
-            parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
-        )
+        return render_compacted(parsed.summary, parsed.source, parsed.session_id, parsed.exchanges)
     if parsed.legacy:
         # The Q&A renderer never wrote a model, so a legacy file carrying one
         # fails to reproduce and stays read-only rather than being rewritten
@@ -267,9 +263,7 @@ def render(parsed: ParsedSession) -> str:
     a compacted session stays compacted rather than being flattened to zero
     exchanges."""
     if parsed.compacted:
-        return render_compacted(
-            parsed.summary, parsed.source, parsed.session_id, parsed.exchanges
-        )
+        return render_compacted(parsed.summary, parsed.source, parsed.session_id, parsed.exchanges)
     return purify.render(parsed.turns, parsed.source, parsed.session_id, parsed.models)
 
 
@@ -313,9 +307,7 @@ def delete_exchange(hub: Path, ckpt_ref: str, file_ref: str, index: int) -> dict
     ensure_committable(hub)
     c, path, parsed = _load(hub, ckpt_ref, file_ref, index)
     if len(parsed.turns) == 1:
-        raise MhError(
-            "that is the session's only exchange; delete the session instead"
-        )
+        raise MhError("that is the session's only exchange; delete the session instead")
     parsed.turns.pop(index - 1)
     if index <= len(parsed.models):
         parsed.models.pop(index - 1)  # or every later answer inherits the wrong one
@@ -374,9 +366,7 @@ def move_session(hub: Path, ckpt_ref: str, file_ref: str, to_ref: str) -> dict:
     key = ck.session_key(path.name)
     clash = [p for p in target.sessions if key and ck.session_key(p.name) == key]
     if clash:
-        raise MhError(
-            f"'{target.slug}' already holds this session as {clash[0].name}"
-        )
+        raise MhError(f"'{target.slug}' already holds this session as {clash[0].name}")
     shutil.move(str(path), str(dest))
     git.auto_commit(hub, f"curate: move {path.name} {c.slug} -> {target.slug}")
     return {"from": c.slug, "to": target.slug, "file": path.name}
