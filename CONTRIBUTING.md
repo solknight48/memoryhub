@@ -23,7 +23,12 @@ uv run ruff format --check      # formatting (`uv run ruff format` to apply)
 
 CI runs exactly these on Linux and macOS, Python 3.12 and 3.13. The UI tests
 need `node` (they run the page's own JavaScript through `tests/uijs.mjs`) and
-skip without it.
+skip without it; the relay tests need `tmux`.
+
+Developing on Linux with a Mac within reach? `scripts/test-remote.sh <ssh-host>`
+rsyncs the working tree there and runs the suite over ssh — macOS-only failures
+(BSD sockets, spawn semantics, a resolver that answers differently) surface in
+seconds instead of a CI round-trip. It needs `uv` on the remote and nothing else.
 
 ## Invariants a change must keep
 
