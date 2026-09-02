@@ -18,6 +18,7 @@ import os
 import secrets
 import signal
 import socket
+import socketserver
 import subprocess
 import sys
 import threading
@@ -37,6 +38,18 @@ from .hub import MhError, project_root_of, read_current
 MAX_BODY = 4 * 1024 * 1024
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
 DEFAULT_PORT = 7777
+
+
+class MapServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind reverse-resolves the bind address for the
+        # Server header (socket.getfqdn) — worth thirty stuck seconds on a
+        # machine with no resolver, worth nothing to a loopback-only map.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = str(self.server_address[0])
+        self.server_port = self.server_address[1]
+
+
 UI_RECORD = "ui.json"  # the detached server, if any: pid and URL — untracked
 UI_LOG = "ui.log"
 
@@ -615,7 +628,7 @@ def adopt(hub: Path, fd: int, read_only: bool, budget: int | None) -> None:
     """The spawned half of --detach: serve on the socket the parent bound,
     with the token it minted, until SIGTERM (`mh ui --stop`)."""
     token = os.environ.pop("MH_UI_TOKEN", "")
-    httpd = ThreadingHTTPServer(
+    httpd = MapServer(
         ("127.0.0.1", 0), make_handler(hub, token, read_only, budget), bind_and_activate=False
     )
     httpd.socket.close()  # the placeholder — the real one is inherited
@@ -638,11 +651,11 @@ def listen(host: str, port: int | None, handler) -> tuple[ThreadingHTTPServer, i
     strict. Returns the server and the port it had to give up on, if any."""
     want = DEFAULT_PORT if port is None else port
     try:
-        return ThreadingHTTPServer((host, want), handler), None
+        return MapServer((host, want), handler), None
     except OSError as e:
         if port is not None or e.errno != errno.EADDRINUSE:
             raise MhError(f"cannot listen on {host}:{want} — {e.strerror or e}") from None
-    return ThreadingHTTPServer((host, 0), handler), want
+    return MapServer((host, 0), handler), want
 
 
 def serve(
