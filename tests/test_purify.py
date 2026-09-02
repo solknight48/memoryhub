@@ -192,10 +192,11 @@ def test_parity_with_original_script(ws, tmp_path):
     )
     turns, _, models = vendored.build_turns(tr)
     turns, models = vendored.drop_trailing_unanswered(turns, models)
-    # The fixture names no model, so models is all-empty and render() takes the
-    # very path a real save takes — parity still covers the shipping renderer,
-    # not a stripped-down variant of it.
-    assert models == ["", ""]
+    # Three turns: the two seeded ones plus JUNK's real-question pair (which
+    # test_junk_filtered pins as kept). The fixture names no model, so models
+    # is all-empty and render() takes the very path a real save takes — parity
+    # still covers the shipping renderer, not a stripped-down variant of it.
+    assert models == ["", "", ""]
     assert vendored.render(turns, str(tr), None, models) == as_mh_format(out.read_text())
 
 
