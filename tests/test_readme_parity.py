@@ -14,8 +14,8 @@ import pytest
 from memoryhub.cli import app
 
 ROOT = Path(__file__).resolve().parents[1]
-ZH = ROOT / "README.md"  # Chinese is the front page GitHub renders
-EN = ROOT / "README.en.md"
+EN = ROOT / "README.md"  # English is the front page GitHub renders
+ZH = ROOT / "README.zh.md"
 READMES = (EN, ZH)
 
 

@@ -56,13 +56,20 @@ The short version:
 
 ## Docs
 
-`README.md` (Chinese, the front page) and `README.en.md` are kept in step by
+`README.md` (English, the front page) and `README.zh.md` are kept in step by
 `tests/test_readme_parity.py`: same section structure, identical command
 table, and every CLI command documented in both. A new command means editing
 both files. User-visible changes get a line in `CHANGELOG.md` under
 *Unreleased*.
 
 ## Looking at the UI
+
+The README's screenshots come from `scripts/showcase.py`: it builds a
+throwaway café project with a hub under a temporary HOME, starts the map on
+it, and captures its states with playwright driving the system chromium
+(`uv run --with playwright --with pillow scripts/showcase.py`). Re-run it
+when the map changes, so the pictures never lie about the page.
+
 
 ```sh
 mh ui --no-browser --port 7777

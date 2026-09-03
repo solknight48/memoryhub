@@ -7,6 +7,10 @@ All notable changes to `mh` are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- README rewritten picture-first, English as the front page (`README.md`) and
+  Chinese as `README.zh.md`; the screenshots come from `scripts/showcase.py`,
+  a throwaway café project that exercises stages, takes, sub-checkpoints,
+  links, a skipped session and a live session.
 - **Sub-checkpoints**: `mh checkpoint <name> --under <ckpt>` (or the dotted
   `mh checkpoint design.head-page`) creates a smaller scope under a
   checkpoint, stored inside its parent's directory and named `parent.child`.

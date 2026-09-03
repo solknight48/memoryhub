@@ -2,7 +2,7 @@
 name = "memoryhub"
 dynamic = ["version"]
 description = "mh — git-like checkpoints for purified AI session context"
-readme = "README.en.md"
+readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -37,6 +37,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_links_load.py" = ["E501"]  # a session fixture quotes mh's one-line preamble
+"scripts/showcase.py" = ["E501"]      # the showcase dialog is prose, kept on its own lines
 
 [tool.ruff.lint.isort]
 known-first-party = ["memoryhub", "conftest"]
