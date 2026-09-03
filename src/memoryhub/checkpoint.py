@@ -34,10 +34,21 @@ def slugify(name: str) -> str:
 
 @dataclass
 class Checkpoint:
-    slug: str
+    slug: str  # the full name: "design", or "design.head-page" for a sub-checkpoint
     created: str  # "YYYY-MM-DD_HHMMSS"
     path: Path
     sessions: list[Path]
+    parent: str | None = None  # the checkpoint this one is a scope of, by slug
+
+    @property
+    def leaf(self) -> str:
+        """The name of its own: "head-page" of "design.head-page"."""
+        return self.slug.rsplit(".", 1)[-1]
+
+
+def is_within(slug: str, ancestor: str) -> bool:
+    """`slug` is `ancestor` or a sub-checkpoint somewhere under it."""
+    return slug == ancestor or slug.startswith(ancestor + ".")
 
 
 def checkpoints_dir(hub: Path) -> Path:
@@ -53,20 +64,28 @@ def _parse_dirname(name: str) -> tuple[str, str] | None:
     return None
 
 
-def list_checkpoints(hub: Path) -> list[Checkpoint]:
-    root = checkpoints_dir(hub)
-    result: list[Checkpoint] = []
-    if not root.is_dir():
-        return result
-    for d in sorted(root.iterdir()):
-        if not d.is_dir():
+def _scan(d: Path, parent: str | None, out: list[Checkpoint]) -> None:
+    for sub in sorted(d.iterdir()):
+        if not sub.is_dir():
             continue
-        parsed = _parse_dirname(d.name)
+        parsed = _parse_dirname(sub.name)
         if not parsed:
             continue
-        stamp, slug = parsed
-        sessions = sorted(p for p in d.glob("*.md") if p.is_file())
-        result.append(Checkpoint(slug, stamp, d, sessions))
+        stamp, leaf = parsed
+        slug = f"{parent}.{leaf}" if parent else leaf
+        sessions = sorted(p for p in sub.glob("*.md") if p.is_file())
+        out.append(Checkpoint(slug, stamp, sub, sessions, parent))
+        _scan(sub, slug, out)  # a sub-checkpoint's directory sits inside its parent's
+
+
+def list_checkpoints(hub: Path) -> list[Checkpoint]:
+    """Every checkpoint, sub-checkpoints included, as one list in creation
+    order — what `mh list` numbers and `back`/`forward` walk."""
+    root = checkpoints_dir(hub)
+    result: list[Checkpoint] = []
+    if root.is_dir():
+        _scan(root, None, result)
+    result.sort(key=lambda c: c.created)
     return result
 
 
@@ -89,12 +108,25 @@ def resolve(hub: Path, ref: str) -> Checkpoint:
     raise MhError(f"no checkpoint '{ref}' (see 'mh list')")
 
 
-def create(hub: Path, name: str, set_current: bool = True, stage: str | None = None) -> Checkpoint:
+def create(
+    hub: Path,
+    name: str,
+    set_current: bool = True,
+    stage: str | None = None,
+    under: str | None = None,
+) -> Checkpoint:
     """A new checkpoint. `stage` places it at an existing column of the
     timeline under a name of its own; without it the name decides (see
-    `stage_of`)."""
-    slug = slugify(name)
+    `stage_of`). `under` makes it a sub-checkpoint — a smaller scope inside
+    that checkpoint, named `parent.child`, stored in the parent's directory."""
+    leaf = slugify(name)
     existing = list_checkpoints(hub)
+    parent = resolve(hub, under) if under else None
+    if parent is not None and stage is not None:
+        raise MhError(
+            "a sub-checkpoint sits at its parent's stage: --at and --under do not combine"
+        )
+    slug = f"{parent.slug}.{leaf}" if parent else leaf
     if any(c.slug == slug for c in existing):
         raise MhError(f"checkpoint '{slug}' already exists")
     if stage is not None and slugify(stage) != stage_of(hub, slug):
@@ -109,14 +141,14 @@ def create(hub: Path, name: str, set_current: bool = True, stage: str | None = N
     while stamp in taken or (existing and stamp <= existing[-1].created):
         now += timedelta(seconds=1)
         stamp = now.strftime(CKPT_STAMP_FMT)
-    d = checkpoints_dir(hub) / f"{stamp}_{slug}"
+    d = (parent.path if parent else checkpoints_dir(hub)) / f"{stamp}_{leaf}"
     d.mkdir(parents=True)
     if set_current:
         write_current(hub, slug)
     # Empty dirs are invisible to git; the --allow-empty commit records the
     # creation event in the journal anyway.
     git.auto_commit(hub, f"checkpoint: {slug}", allow_empty=True)
-    return Checkpoint(slug, stamp, d, [])
+    return Checkpoint(slug, stamp, d, [], parent.slug if parent else None)
 
 
 def write_session(ckpt: Checkpoint, body: str, key: str, stamp: str) -> str:
@@ -266,11 +298,12 @@ def write_stages(hub: Path, stages: dict[str, str]) -> None:
 
 
 def stage_of(hub: Path, slug: str, explicit: dict[str, str] | None = None) -> str:
-    placed = (explicit if explicit is not None else read_stages(hub)).get(slug)
+    root = slug.split(".", 1)[0]  # a sub-checkpoint sits at its parent's stage
+    placed = (explicit if explicit is not None else read_stages(hub)).get(root)
     if placed:
         return placed
-    base = STAGE_SUFFIX.sub("", slug)
-    return base or slug
+    base = STAGE_SUFFIX.sub("", root)
+    return base or root
 
 
 def stages(hub: Path, cps: list[Checkpoint] | None = None) -> list[dict]:
@@ -280,8 +313,39 @@ def stages(hub: Path, cps: list[Checkpoint] | None = None) -> list[dict]:
     explicit = read_stages(hub)
     columns: dict[str, list[str]] = {}
     for c in cps:
+        if c.parent:
+            continue  # hangs under its parent's node; not a member of the column
         columns.setdefault(stage_of(hub, c.slug, explicit), []).append(c.slug)
     return [{"stage": st, "members": members} for st, members in columns.items()]
+
+
+# --- skipped sessions --------------------------------------------------------
+# A session left out of `mh load` on request — a detour, a session whose
+# conclusions were superseded — while it stays in its checkpoint for `mh show`
+# and the map. `skip.toml` lists them by id (checkpoint/file); curate keeps the
+# entries following renames and moves, and drops them with a deleted session.
+
+
+def skip_path(hub: Path) -> Path:
+    return hub / "skip.toml"
+
+
+def read_skips(hub: Path) -> set[str]:
+    """Session ids (checkpoint/file) that `mh load` leaves out."""
+    path = skip_path(hub)
+    if not path.is_file():
+        return set()
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    rows = data.get("skip", [])
+    return {str(r) for r in rows} if isinstance(rows, list) else set()
+
+
+def write_skips(hub: Path, ids: set[str]) -> None:
+    if ids:
+        rows = ",\n  ".join(json.dumps(i) for i in sorted(ids))
+        skip_path(hub).write_text(f"skip = [\n  {rows},\n]\n", encoding="utf-8")
+    elif skip_path(hub).exists():
+        skip_path(hub).write_text("skip = []\n", encoding="utf-8")
 
 
 def next_at(hub: Path, stage: str) -> str:

@@ -14,11 +14,11 @@ import typer
 from . import __version__, curate, git, purify
 from . import agents as agents_mod
 from . import checkpoint as ck
+from . import compact as compactmod
 from . import hooks as hooksmod
 from . import hub as hubmod
 from . import live as livemod
 from . import load as loadmod
-from . import relay as relaymod
 from . import save as savemod
 from . import templates as tmpl
 from .hub import MhError
@@ -149,26 +149,40 @@ def checkpoint(
         "--at",
         help="Stage (timeline column) to put it at; alone, names it design-2, design-3, …",
     ),
+    under: str | None = typer.Option(
+        None,
+        "--under",
+        metavar="CKPT",
+        help="Make it a sub-checkpoint of that checkpoint: a smaller scope, named parent.child.",
+    ),
     json_: bool = JSON_OPT,
 ):
     """Create a new checkpoint (sub-hub) and make it current."""
     hub = _hub()
     _announce(hub)
+    if name and under is None and "." in name:
+        under, name = name.rsplit(".", 1)  # design.head-page: the dotted form of --under
+    if name is None and under is not None:
+        raise MhError("a sub-checkpoint needs a name: mh checkpoint <name> --under <checkpoint>")
     if name is None and at is not None:
         name = ck.next_at(hub, at)
     elif name is None:
         name = tmpl.next_name(hub)
-    c = ck.create(hub, name, stage=at)
+    c = ck.create(hub, name, stage=at, under=under)
     prog = tmpl.progress(hub)
     if json_:
         _emit_json(
             {
                 "checkpoint": c.slug,
+                "parent": c.parent,
                 "created": c.created,
                 "path": str(c.path),
                 "template": prog and {k: prog[k] for k in ("name", "done", "total", "next")},
             }
         )
+        return
+    if c.parent:
+        print(f"sub-checkpoint '{c.slug}' created (current) — under {c.parent}")
         return
     column = ck.stage_of(hub, c.slug)
     members = next((col["members"] for col in ck.stages(hub) if col["stage"] == column), [])
@@ -188,6 +202,9 @@ def template(
         None, help="Template to use for this hub's checkpoint names."
     ),
     list_: bool = typer.Option(False, "--list", help="Show the built-in templates."),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="With --list: what happens at each stage."
+    ),
     clear: bool = typer.Option(False, "--clear", help="Stop using a template."),
     json_: bool = JSON_OPT,
 ):
@@ -199,7 +216,8 @@ def template(
         for t in tmpl.catalogue():
             print(f"{t['name']:10} {t['title']}")
             for i, st in enumerate(t["stages"], 1):
-                print(f"  {i:2}. {st['name']} — {st['about']}")
+                # the names are the list; what happens at each stage is behind -v
+                print(f"  {i:2}. {st['name']}" + (f" — {st['about']}" if verbose else ""))
         print("\nmh template <name> uses one; mh checkpoint (no name) then creates its stages")
         return
     hub = _hub()
@@ -272,7 +290,18 @@ def save(
     compact: bool = typer.Option(
         False,
         "--compact",
-        help="Store an agent-written summary of this session (needs --file).",
+        help="Store a summary instead of the dialog (from --file, or written by --with).",
+    ),
+    with_: str | None = typer.Option(
+        None,
+        "--with",
+        metavar="agent|claude|pi",
+        help="Have this CLI write the --compact summary (agent = the one that ran the session).",
+    ),
+    focus: str | None = typer.Option(
+        None,
+        "--focus",
+        help="What the --with summary should focus on, like `/compact <instructions>`.",
     ),
     session_id: str | None = typer.Option(
         None, "--session-id", help="Purify a specific session id."
@@ -294,28 +323,43 @@ def save(
         raise MhError("no current checkpoint (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
 
     applied = 0  # live edits folded in; the --file branch stores a given document
+    if (with_ or focus) and not compact:
+        raise MhError("--with and --focus go with --compact")
     if compact:
-        # mh has no model of its own: the agent driving the session writes the
-        # summary and hands it over. Without one there is nothing to compact,
-        # and falling back to purified dialog would put a representation in the
+        # mh has no model of its own. The summary comes from the agent driving
+        # the session (--file, the skill's way) or from that agent's CLI run in
+        # print mode (--with). Without either there is nothing to compact, and
+        # falling back to purified dialog would put a representation in the
         # checkpoint that the flag did not ask for.
-        if not file:
+        if with_ and file:
+            raise MhError("--with and --file are two sources for one summary; give one")
+        if with_ and with_ not in compactmod.CHOICES:
+            raise MhError(f"--with takes one of {', '.join(compactmod.CHOICES)}, not '{with_}'")
+        if not file and not with_:
             raise MhError(
                 "--compact needs the summary to store: mh does not summarize by "
                 "itself. Let the agent write one and pass it with --file "
-                "(the mh skill does this), or save without --compact."
+                "(the mh skill does this), have the session's own CLI write it "
+                "with --with agent, or save without --compact."
             )
-        if not file.is_file():
-            raise MhError(f"file not found: {file}")
-        summary = file.read_text(encoding="utf-8").strip()
-        if not summary:
-            raise MhError(f"{file} is empty — nothing to compact")
         src, sid, key, turns, last_ts, models, applied = _resolve_session(
             hub, session_id, transcript
         )
-        # count what a purified save of this session would hold, so the two
+        # what a purified save of this session would hold, so the two
         # representations never disagree about how many exchanges there were
-        turns, _ = purify.drop_trailing_unanswered(turns, models)
+        turns, models = purify.drop_trailing_unanswered(turns, models)
+        if with_:
+            if not turns:
+                raise MhError(f"no dialog to compact in {src.name}")
+            agent = agents_mod.detect_agent(src) if with_ == "agent" else with_
+            dialog = purify.render(turns, str(src), sid, models)
+            summary = compactmod.summarize(agent, dialog, focus)
+        else:
+            if not file.is_file():
+                raise MhError(f"file not found: {file}")
+            summary = file.read_text(encoding="utf-8").strip()
+            if not summary:
+                raise MhError(f"{file} is empty — nothing to compact")
         body = curate.render_compacted(summary, str(src), sid, len(turns))
         stamp = purify.stamp_for(last_ts, src)
     elif file:
@@ -336,7 +380,9 @@ def save(
 
     # An explicit `mh save` may replace a compacted summary with the dialog;
     # the automatic paths (hook, panel) never do.
-    stored = savemod.store(hub, key, body, stamp, ref, replace_compacted=True)
+    # the journal names the CLI that wrote a --with summary, as the panel's path does
+    note = f"compact via {agent}" if compact and with_ else ""
+    stored = savemod.store(hub, key, body, stamp, ref, replace_compacted=True, note=note)
     target, fname = stored.checkpoint, stored.file
     count = len(ck.resolve(hub, target.slug).sessions)
     if json_:
@@ -542,13 +588,22 @@ def rm(
         if exchange is not None:
             raise MhError("-x needs a session: mh rm <checkpoint>/<session> -x N")
         c = ck.resolve(hub, ck_ref)
-        if c.sessions and not force:
+        subtree = [x for x in ck.list_checkpoints(hub) if ck.is_within(x.slug, c.slug)]
+        held = [
+            f"{n} {what}"
+            for n, what in (
+                (sum(len(x.sessions) for x in subtree), "session(s)"),
+                (len(subtree) - 1, "sub-checkpoint(s)"),
+            )
+            if n
+        ]
+        if held and not force:
             raise MhError(
-                f"'{c.slug}' still holds {len(c.sessions)} session(s); "
-                f"pass --force to delete them all"
+                f"'{c.slug}' still holds {' and '.join(held)}; pass --force to delete them all"
             )
         res = curate.delete_checkpoint(hub, c.slug)
-        msg = f"deleted checkpoint {res['slug']} ({res['sessions']} sessions)"
+        subs = f", {res['sub_checkpoints']} sub-checkpoints" if res["sub_checkpoints"] else ""
+        msg = f"deleted checkpoint {res['slug']} ({res['sessions']} sessions{subs})"
     if json_:
         _emit_json(res)
     else:
@@ -574,6 +629,47 @@ def mv(
         _emit_json(res)
     else:
         print(f"moved {res['file']}: {res['from']} -> {res['to']}")
+
+
+SESSION_REF = typer.Argument(..., metavar="CKPT/SESSION", help="Session (file prefix ok).")
+
+
+@app.command()
+@guard
+def skip(ref: str = SESSION_REF, json_: bool = JSON_OPT):
+    """Leave a session out of `mh load`; it stays in its checkpoint (`mh unskip` undoes)."""
+    hub = _hub()
+    _announce(hub)
+    ck_ref, file_ref = _split_session_ref(
+        ref, "skip takes a session: mh skip <checkpoint>/<session>"
+    )
+    res = curate.skip_session(hub, ck_ref, file_ref, True)
+    if json_:
+        _emit_json(res)
+    elif res.get("unchanged"):
+        print(f"{res['checkpoint']}/{res['file']} is already skipped — nothing to do")
+    else:
+        print(
+            f"skipped {res['checkpoint']}/{res['file']}: mh load leaves it out (mh unskip undoes)"
+        )
+
+
+@app.command()
+@guard
+def unskip(ref: str = SESSION_REF, json_: bool = JSON_OPT):
+    """Load a skipped session again."""
+    hub = _hub()
+    _announce(hub)
+    ck_ref, file_ref = _split_session_ref(
+        ref, "unskip takes a session: mh unskip <checkpoint>/<session>"
+    )
+    res = curate.skip_session(hub, ck_ref, file_ref, False)
+    if json_:
+        _emit_json(res)
+    elif res.get("unchanged"):
+        print(f"{res['checkpoint']}/{res['file']} is not skipped — nothing to do")
+    else:
+        print(f"{res['checkpoint']}/{res['file']} loads again")
 
 
 @app.command()
@@ -700,6 +796,11 @@ def goto(ref: str = typer.Argument(..., help="Checkpoint slug, prefix, or index.
 def load(
     refs: list[str] | None = typer.Argument(None, help="Checkpoints to load (default: current)."),
     no_links: bool = typer.Option(False, "--no-links", help="Do not follow links."),
+    tree: bool = typer.Option(
+        False,
+        "--tree",
+        help="Whole nodes: every checkpoint in the pack with the sub-checkpoints of its node.",
+    ),
     budget: int = typer.Option(
         loadmod.DEFAULT_BUDGET,
         "--budget",
@@ -715,6 +816,7 @@ def load(
         list(refs) if refs else None,
         follow_links=not no_links,
         budget=None if all_ else budget,
+        tree=tree,
     )
     if result.over_budget:
         print(
@@ -729,6 +831,7 @@ def load(
                 "linked_expansion": result.expanded,
                 "sessions": result.included,
                 "omitted": result.omitted,
+                "skipped": result.skipped,
                 "budget": result.budget,
                 "used_tokens": result.used,
                 "hub_commit": result.sha,
@@ -800,6 +903,7 @@ def list_(json_: bool = JSON_OPT):
     links = ck.read_links(hub)
     current = hubmod.read_current(hub)
     placed = ck.read_stages(hub)
+    skips = ck.read_skips(hub)
     if json_:
         _emit_json(
             [
@@ -809,6 +913,7 @@ def list_(json_: bool = JSON_OPT):
                     "stage": ck.stage_of(hub, c.slug, placed),
                     "created": c.created,
                     "sessions": len(c.sessions),
+                    "skipped": sum(f"{c.slug}/{p.name}" in skips for p in c.sessions),
                     "last_save": _newest_stamp(c),
                     "links": ck.partners_of(c.slug, links),
                     "current": c.slug == current,
@@ -832,7 +937,11 @@ def list_(json_: bool = JSON_OPT):
         last = _stamp_display(newest) if newest else "—"
         partners = ", ".join(ck.partners_of(c.slug, links))
         column = ck.stage_of(hub, c.slug, placed)
-        at = f"  (at {column})" if column != c.slug else ""
+        at = (
+            f"  (under {c.parent})"
+            if c.parent
+            else (f"  (at {column})" if column != c.slug else "")
+        )
         print(
             f"  {marker} {i + 1}  {created}  {c.slug.ljust(width)}  "
             f"{str(len(c.sessions)).rjust(8)}  {last.ljust(16)}  {partners}{at}"
@@ -888,6 +997,7 @@ def status(json_: bool = JSON_OPT):
     hub = _hub()
     cps = ck.list_checkpoints(hub)
     links = ck.read_links(hub)
+    skips = ck.read_skips(hub)
     current = hubmod.read_current(hub)
     total_sessions = sum(len(c.sessions) for c in cps)
 
@@ -919,6 +1029,7 @@ def status(json_: bool = JSON_OPT):
                 "checkpoints": len(cps),
                 "sessions": total_sessions,
                 "links": len(links),
+                "skipped": len(skips),
                 "loads_with": closure_slugs,
                 "template": prog and {k: prog[k] for k in ("name", "done", "total", "next")},
                 "last_save": newest,
@@ -943,7 +1054,8 @@ def status(json_: bool = JSON_OPT):
             )
     else:
         print("current: none (run 'mh checkpoint <name>' or 'mh goto <ckpt>')")
-    print(f"checkpoints: {len(cps)} · sessions: {total_sessions} · links: {len(links)}")
+    counts = f"checkpoints: {len(cps)} · sessions: {total_sessions} · links: {len(links)}"
+    print(counts + (f" · skipped on load: {len(skips)}" if skips else ""))
     if prog:
         ahead = f"next: {prog['next']}" if prog["next"] else "all stages created"
         print(f"template: {prog['name']} — {prog['done']} of {prog['total']} stages · {ahead}")
@@ -1236,6 +1348,9 @@ def hook_load(
         loadmod.DEFAULT_BUDGET, "--budget", help="Token budget for the injected pack."
     ),
     all_: bool = typer.Option(False, "--all", help="No budget: inject everything."),
+    tree: bool = typer.Option(
+        False, "--tree", help="Whole nodes: each checkpoint packed with its node's sub-checkpoints."
+    ),
 ):
     """Claude Code SessionStart handler: emit the warm-start pack into context.
 
@@ -1248,14 +1363,12 @@ def hook_load(
     hub = _hook_hub(payload)
     if hub is None:
         return
-    # Which tmux pane this session lives in, so `mh ui` can type into it. Done
-    # before the resume check: a resumed session has its context already, but
-    # it still moved to a new pane.
-    relaymod.record_from_hook(hub, payload)
     if payload.get("source") in ("resume", "compact"):
         return
     try:
-        result = loadmod.build(hub, None, follow_links=True, budget=None if all_ else budget)
+        result = loadmod.build(
+            hub, None, follow_links=True, budget=None if all_ else budget, tree=tree
+        )
     except MhError as e:
         print(f"mh hook load: {e.message} — skipped", file=sys.stderr)
         return
@@ -1286,6 +1399,11 @@ def hook_install(
         help=f"Token budget for the pack injected at session start "
         f"(default {loadmod.DEFAULT_BUDGET}).",
     ),
+    tree: bool = typer.Option(
+        False,
+        "--tree",
+        help="Session-start pack of whole nodes: each checkpoint with its node's sub-checkpoints.",
+    ),
 ):
     """Wire mh into Claude Code hooks: load at SessionStart, save at SessionEnd and PreCompact."""
     if user:
@@ -1299,11 +1417,15 @@ def hook_install(
         else:
             print(f"no mh hooks in {path} — nothing to do")
         return
-    events = hooksmod.install(path, budget)
+    events = hooksmod.install(path, budget, tree)
     if events:
         print(f"installed mh hooks ({', '.join(events)}) -> {path}")
         if budget is not None:
             print(f"session start injects up to ~{budget} tokens of memory")
+        if tree:
+            print(
+                "session start packs whole nodes: each checkpoint with its node's sub-checkpoints"
+            )
         print(
             "active from the next Claude Code session: memory injects itself at "
             "start, and saves run at session end and before compaction"

@@ -126,7 +126,12 @@ def test_the_map_carries_columns_and_creates_takes(ws, hub_project):
     hub = hub_of(hub_project)
     server.dispatch(hub, "POST", "/api/checkpoint/create", {}, {"name": "design"}, False)
     status, r = server.dispatch(hub, "POST", "/api/checkpoint/create", {}, {"at": "design"}, False)
-    assert status == 200 and r == {"slug": "design-2", "created": r["created"], "stage": "design"}
+    assert status == 200 and r == {
+        "slug": "design-2",
+        "parent": None,
+        "created": r["created"],
+        "stage": "design",
+    }
     status, r = server.dispatch(
         hub, "POST", "/api/checkpoint/create", {}, {"name": "bars", "at": "design"}, False
     )

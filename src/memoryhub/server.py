@@ -31,10 +31,9 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from . import __version__, curate, git, load, purify
 from . import checkpoint as ck
-from . import commands as commandsmod
+from . import compact as compactmod
 from . import live as livemod
 from . import memory as memorymod
-from . import relay as relaymod
 from . import templates as tmpl
 from .hub import MhError, project_root_of, read_current, write_current
 
@@ -57,7 +56,7 @@ UI_RECORD = "ui.json"  # the detached server, if any: pid and URL — untracked
 UI_LOG = "ui.log"
 
 
-def _session_rows(c: ck.Checkpoint) -> list[dict]:
+def _session_rows(c: ck.Checkpoint, skips: set[str]) -> list[dict]:
     rows = []
     for p in c.sessions:
         text = p.read_text(encoding="utf-8", errors="replace")
@@ -85,30 +84,47 @@ def _session_rows(c: ck.Checkpoint) -> list[dict]:
                 "legacy": bool(parsed and parsed.legacy),
                 "compacted": bool(parsed and parsed.compacted),
                 "preview": preview,
+                # left out of mh load on request; the row's checkbox toggles it
+                "skipped": f"{c.slug}/{p.name}" in skips,
             }
         )
     return rows
 
 
-def _map(hub: Path, budget: int | None) -> dict:
+def _hub_rev(hub: Path) -> str:
+    """A cheap fingerprint of the hub's state: its last commit (the reflog's
+    mtime) and the current pointer, which is not a commit. Every map and live
+    response carries it, so the page notices a change made from a terminal —
+    `mh link`, `mh goto`, a hook's save — and re-reads the map by itself."""
+    try:
+        stamp = (hub / ".git" / "logs" / "HEAD").stat().st_mtime_ns
+    except OSError:
+        stamp = 0
+    return f"{stamp}:{read_current(hub) or ''}"
+
+
+def _map(hub: Path, budget: int | None, tree: bool = False) -> dict:
     cps = ck.list_checkpoints(hub)
     error = None
     try:
-        result = load.build(hub, None, True, budget)
-        loaded, omitted = result.loaded, result.omitted
+        result = load.build(hub, None, True, budget, tree=tree)  # what `mh load [--tree]` packs
+        loaded, omitted, skipped = result.loaded, result.omitted, result.skipped
         included = [b["id"] for b in result.included]
     except MhError as e:
         # Say why the next load would be empty; a greyed-out map with no
         # explanation is the same dead end the git errors below avoid.
-        loaded, included, omitted, error = [], [], [], e.message
+        loaded, included, omitted, skipped, error = [], [], [], [], e.message
     placed = ck.read_stages(hub)
+    skips = ck.read_skips(hub)
     return {
         "checkpoints": [
             {
                 "slug": c.slug,
+                "name": c.leaf,
+                "parent": c.parent,  # a sub-checkpoint: drawn under this node, loads with it
                 "stage": ck.stage_of(hub, c.slug, placed),
                 "created": c.created,
-                "sessions": _session_rows(c),
+                "sessions": _session_rows(c, skips),
             }
             for c in cps
         ],
@@ -116,14 +132,15 @@ def _map(hub: Path, budget: int | None) -> dict:
         "stages": ck.stages(hub, cps),
         "links": [list(e) for e in ck.read_links(hub)],
         "current": read_current(hub),
+        "hub_rev": _hub_rev(hub),
         "budget": budget,
         # the stage template, with the stages still ahead: the map draws them
         "template": tmpl.progress(hub),
-        "templates": tmpl.catalogue(),
         "load": {
             "loaded": loaded,
             "included": included,
             "omitted": omitted,
+            "skipped": skipped,
             "error": error,
         },
     }
@@ -281,6 +298,7 @@ def _live(hub: Path, fp: str, sid: str | None, full: bool = False) -> dict:
     if not cands:
         return {
             "present": False,
+            "hub_rev": _hub_rev(hub),
             "reason": "no transcript for this project yet (claude, pi, codex)",
         }
     d = livemod.pick(cands, sid)
@@ -295,6 +313,9 @@ def _live(hub: Path, fp: str, sid: str | None, full: bool = False) -> dict:
         "session_id": d.sid,
         "file": d.path.name,
         "current": read_current(hub),
+        "hub_rev": _hub_rev(hub),
+        # whether a summary can be written for this session, and by which CLI
+        "compactor": compactmod.describe(d.agent),
         # newest first; `idle` is seconds since the transcript was last written
         # — how the page tells a session that ended from one merely older than
         # the one it was asked to follow
@@ -329,19 +350,7 @@ def _live(hub: Path, fp: str, sid: str | None, full: bool = False) -> dict:
         "stale": stale,
         "would_store": len(turns),
         "saved": _saved_copy(hub, ls, entries),
-        # where a message typed in the page would land, or why it cannot
-        "terminal": relaymod.target(hub, ls),
     }
-
-
-def _commands(hub: Path, sid: str | None) -> dict:
-    """What the composer may offer at the start of a message: the skills and
-    commands of the agent behind the followed session, read from disk now, so
-    a skill installed a minute ago is already on the list."""
-    ls = livemod.read(hub, sid)
-    if ls is None:
-        raise MhError("no transcript for this project yet (claude, pi, codex)")
-    return commandsmod.commands(ls.agent, project_root_of(hub))
 
 
 def _memory(hub: Path) -> dict:
@@ -373,7 +382,7 @@ def dispatch(
         if path == "/api/map":
             raw = query.get("budget") or str(load.DEFAULT_BUDGET)
             budget = None if raw in ("", "none", "all") else int(raw)
-            return 200, _map(hub, budget)
+            return 200, _map(hub, budget, query.get("tree") == "1")
         if path == "/api/session":
             ckpt, file = _need(query, "ckpt", "file")
             return 200, _session(hub, ckpt, file)
@@ -386,8 +395,6 @@ def dispatch(
             )
         if path == "/api/memory":
             return 200, _memory(hub)
-        if path == "/api/live/commands":
-            return 200, _commands(hub, query.get("sid") or None)
         return 404, {"error": f"no route {path}"}
 
     if method != "POST":
@@ -408,9 +415,13 @@ def dispatch(
         return 200, livemod.edit(
             hub, int(index), body.get("user"), body.get("agent"), body.get("sid") or None
         )
-    if path == "/api/live/say":
-        (text,) = _need(body, "text")
-        return 200, relaymod.send(hub, text, body.get("sid") or None)
+    if path == "/api/live/compact":
+        # "to" names the checkpoint, as it does for the dialog save; without
+        # it the session stays where it lives, else lands in the current one
+        focus = (body.get("focus") or "").strip() or None
+        return 200, compactmod.compact_live(
+            hub, body.get("sid") or None, focus, body.get("to") or None
+        )
     if path == "/api/live/discard":
         return 200, livemod.discard(hub, body.get("sid") or None)
 
@@ -428,6 +439,10 @@ def dispatch(
     if path == "/api/session/move":
         ckpt, file, to = _need(body, "ckpt", "file", "to")
         return 200, curate.move_session(hub, ckpt, file, to)
+    if path == "/api/session/skip":
+        # {"skipped": true} leaves the session out of mh load; false loads it again
+        ckpt, file = _need(body, "ckpt", "file")
+        return 200, curate.skip_session(hub, ckpt, file, bool(body.get("skipped", True)))
     if path == "/api/checkpoint/rename":
         slug, name = _need(body, "slug", "name")
         return 200, curate.rename_checkpoint(hub, slug, name)
@@ -435,19 +450,20 @@ def dispatch(
         (slug,) = _need(body, "slug")
         return 200, curate.delete_checkpoint(hub, slug)
     if path == "/api/checkpoint/create":
-        # a name, or a stage to add one more take at (named design-2, design-3, …)
+        # a name, or a stage to add one more take at (named design-2, design-3, …);
+        # "under" makes it a sub-checkpoint of that checkpoint
         at = body.get("at") or None
-        name = body.get("name") or (ck.next_at(hub, at) if at else None)
+        under = body.get("under") or None
+        name = body.get("name") or (ck.next_at(hub, at) if at and not under else None)
         if not name:
             raise MhError("missing 'name'")
-        c = ck.create(hub, name, stage=at)
-        return 200, {"slug": c.slug, "created": c.created, "stage": ck.stage_of(hub, c.slug)}
-    if path == "/api/template":
-        # {"name": "quant"} chooses one; {"name": null} stops using any
-        if body.get("name"):
-            return 200, tmpl.use(hub, str(body["name"]))
-        tmpl.clear(hub)
-        return 200, {"name": None}
+        c = ck.create(hub, name, stage=at, under=under)
+        return 200, {
+            "slug": c.slug,
+            "parent": c.parent,
+            "created": c.created,
+            "stage": ck.stage_of(hub, c.slug),
+        }
     if path == "/api/template/stages":
         (stages,) = _need(body, "stages")
         return 200, tmpl.set_stages(hub, stages)

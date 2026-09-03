@@ -70,32 +70,67 @@ body {
   color: var(--text-primary);
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+/* the header stays put, so the jump to the live session, "+ checkpoint" and
+   refresh are one click away from any depth of the page */
 header {
-  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
-  padding: 14px 24px; background: var(--page);
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 12px 24px; background: var(--page); border-bottom: 1px solid var(--border);
 }
 header h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: -0.02em; }
-header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+header .hub { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace;
+              max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spacer { flex: 1; }
-main { padding: 8px 24px 28px; max-width: 1100px; margin: 0 auto; }
-.tagline { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 4px 0 18px; }
+main { padding: 16px 24px 28px; max-width: 1100px; margin: 0 auto; }
 /* ?view=<sid>: a page for one transcript, opened from "open original". Only
-   the live panel, pinned to that session for good, full output, every
+   the live panel, pinned to that session for good, thinking and tool calls shown, every
    exchange — the map, its controls and the session-switching are not here. */
-body.viewonly main > section:not(#livesec), body.viewonly .tagline,
-body.viewonly #budget, body.viewonly #budget-label, body.viewonly #newckpt, body.viewonly #tmpl,
-body.viewonly #reload, body.viewonly #golive, body.viewonly #live-follow, body.viewonly #live-newest,
-body.viewonly #current { display: none !important; }
+body.viewonly main > section:not(#livesec),
+body.viewonly #newckpt, body.viewonly #reload, body.viewonly #golive,
+body.viewonly #live-follow, body.viewonly #live-newest { display: none !important; }
+/* the header's live-session button is the panel's switch: lit while it is on */
+#golive.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 section {
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 20px; padding: 22px 24px; margin-bottom: 22px;
   box-shadow: 0 1px 2px rgba(20, 15, 5, 0.03), 0 12px 32px -28px rgba(20, 15, 5, 0.35);
+  scroll-margin-top: 70px;  /* a jump lands below the sticky header, not under it */
 }
 h2 { font-size: 17px; margin: 0 0 14px; font-weight: 800; color: var(--text-primary);
      letter-spacing: -0.01em; }
+/* every panel opens the same way: a title row — what it is, one line of
+   facts, the buttons that act on it, a close — then its content */
+.sechead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sechead h2 { margin: 0; }
+.sechead .kind { color: var(--muted); font-weight: 600; margin-right: 6px; }
+.meta { color: var(--muted); font-size: 12px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+          color: var(--text-secondary); cursor: pointer; }
+.status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+/* the save box: how this session is stored and where — the decision that
+   matters most on the live panel, so it is a panel of its own, not a menu */
+.savebox { border: 1px solid var(--grid); border-radius: 14px; padding: 12px 16px 14px;
+           margin-bottom: 14px; background: var(--page); }
+.savebox h3 { margin: 0; font-size: 14px; font-weight: 750; }
+.choice { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: baseline;
+          padding: 6px 0; cursor: pointer; }
+.choice input { margin: 0; accent-color: var(--accent); }
+.choice b { font-weight: 650; }
+.choice .hint { grid-column: 2; font-size: 12px; color: var(--muted); }
+.choice.off { opacity: 0.55; cursor: default; }
+#saveto { font: inherit; font-size: 12.5px; padding: 3px 8px; border-radius: 999px; margin-left: 4px;
+          border: 1px solid var(--baseline); background: var(--surface-1); color: var(--text-primary); }
+#savefocus { width: 100%; max-width: 560px; font: inherit; font-size: 13px; padding: 6px 12px;
+             border-radius: 10px; border: 1px solid var(--baseline); background: var(--surface-1);
+             color: var(--text-primary); }
+#savefocus:focus { outline: none; border-color: var(--accent); }
+button.close { padding: 1px 9px 2px; font-size: 16px; line-height: 1.3; color: var(--muted); }
+button.close:hover { color: var(--critical); border-color: var(--critical); }
 .mapwrap { overflow-x: auto; }
 svg { display: block; }
-svg text { font: 11px system-ui, sans-serif; }
+svg text { font: 11px system-ui, sans-serif; paint-order: stroke; stroke: var(--surface-1);
+           stroke-width: 3px; stroke-linejoin: round; }
 .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px;
           font-size: 12px; color: var(--text-secondary); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -128,21 +163,30 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 .srow { display: flex; align-items: flex-start; gap: 14px; padding: 14px 12px;
         border-top: 1px solid var(--grid); cursor: pointer; border-radius: 14px; }
 .srow:first-child { border-top: 0; }
-.srow:hover { background: var(--accent-soft); }
+.srow:hover, .srow.open { background: var(--accent-soft); }
+/* the load box: ticked, the session goes into the next mh load with its
+   checkpoint; unticked, mh load leaves it out and it stays here, dimmed */
+.loadbox { display: flex; align-items: center; align-self: center; flex: none; padding: 6px; cursor: pointer; }
+.loadbox input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.loadbox input:disabled { cursor: default; }
+.srow.skipped .avatar, .srow.skipped .smain { opacity: 0.55; }
 .srow:hover + .srow { border-top-color: transparent; }
 .avatar { width: 44px; height: 44px; border-radius: 50%; flex: none;
           display: flex; align-items: center; justify-content: center;
           font-weight: 800; font-size: 14px; color: var(--avatar-ink); }
 .smain { flex: 1; min-width: 0; }
 .stitle { font-weight: 750; font-size: 14.5px; }
-.stitle .skey { color: var(--muted); font-weight: 500; font-size: 12.5px;
-               font-family: ui-monospace, monospace; margin-left: 4px; }
+.skey { color: var(--muted); font-weight: 500; font-size: 12.5px;
+        font-family: ui-monospace, monospace; margin-left: 4px; }
 .spreview { color: var(--text-secondary); font-size: 13px; line-height: 1.45; margin-top: 3px;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sacts { display: flex; gap: 8px; flex: none; align-self: center; }
 .badge { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 999px;
          border: 1px solid var(--border); color: var(--text-secondary); margin-left: 6px; }
 .badge.warn { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 35%, transparent); }
+.badge.ok { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.badge.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.status .badge, .sechead .badge { margin-left: 0; }
 .ex { border: 1px solid var(--border); border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
 .ex header { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
              background: var(--page); border: 0; border-bottom: 1px solid var(--border); }
@@ -225,7 +269,6 @@ pre .t { color: var(--c-type); }
 .livedot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
            background: var(--good); margin-left: 8px; vertical-align: middle;
            animation: pulse 2.2s ease-in-out infinite; }
-.livedot.off { background: var(--neutral-mark); animation: none; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 .ex.dropped { opacity: 0.55; }
 .droppreview { padding: 11px 16px; color: var(--text-secondary);
@@ -269,21 +312,6 @@ pre .t { color: var(--c-type); }
 .shot { display: block; max-width: 100%; max-height: 360px; border-radius: 10px;
         border: 1px solid var(--grid); margin: 8px 0 4px; background: var(--page); }
 .shotlink { display: inline-block; max-width: 100%; }
-/* type back into the session: a paste into its terminal, not a fake reply.
-   It sits under the dialog like a chat box and stays pinned to the bottom of
-   the window while the live section is in view, so the newest exchange and
-   the place to answer it are never a scroll apart. Sticky, not fixed: it
-   scrolls away with its section instead of covering the map below. */
-.composer { position: sticky; bottom: 12px; border: 1px solid var(--baseline);
-            border-radius: 14px; padding: 10px 12px; background: var(--page);
-            box-shadow: 0 1px 2px rgba(20, 15, 5, 0.04),
-                        0 -10px 24px -18px rgba(20, 15, 5, 0.45); }
-.composer textarea { border: 0; background: transparent; padding: 0; min-height: 52px;
-                     font: 13.5px/1.55 system-ui, sans-serif; }
-.composer textarea:focus { outline: none; }
-.composer .to { font-size: 12px; color: var(--muted); flex: 1; min-width: 0;
-                overflow-wrap: anywhere; }
-.composer .to.off { color: var(--critical); }
 /* Claude Code's per-project auto-memory, shown read-only beside the map: one
    card per note, its markdown body, the notes it links to, and the session it
    came from. mh does not own this folder and never writes it. */
@@ -315,30 +343,15 @@ pre .t { color: var(--c-type); }
 .linklike { border: 0; background: transparent; color: var(--accent); cursor: pointer;
             padding: 0; font: inherit; text-decoration: underline; }
 .linklike:hover { opacity: 0.8; }
-/* the box's projection of the CLI: a message that starts with "/" brings up
-   the session's own skills and commands (read from disk by mh) and, behind
-   /model, its models. Picking one composes the text here; the CLI runs it as
-   if typed at its prompt. It grows upward from the message box, since the
-   composer sits at the bottom of the window. */
-.palette { border: 1px solid var(--baseline); border-radius: 10px; background: var(--surface-1);
-           margin-bottom: 8px; max-height: 260px; overflow: auto; overscroll-behavior: contain; }
-.palette .phead { font-size: 11px; color: var(--muted); padding: 6px 10px 4px;
-                  position: sticky; top: 0; background: var(--surface-1); }
-.palette .pitem { display: flex; gap: 10px; align-items: baseline; padding: 5px 10px;
-                  cursor: pointer; }
-.palette .pitem.sel, .palette .pitem:hover { background: var(--accent-soft); }
-.palette .pname { font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  white-space: nowrap; }
-.palette .phint { font: 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  color: var(--muted); white-space: nowrap; }
-.palette .pdesc { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0;
-                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette .pkind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
-                  color: var(--muted); white-space: nowrap; }
-.palette .pempty { padding: 6px 10px 8px; font-size: 12px; color: var(--muted); }
-.liverow { margin-bottom: 12px; }
-.liverow label { font-size: 12px; }
 #menu .menu-label { font-size: 11px; color: var(--muted); padding: 2px 8px 6px; }
+/* a question with a red answer: deletes confirm here, in the same popover as
+   every other choice on the page, so nothing blocks it */
+#menu .confirmtext { max-width: 320px; padding: 4px 8px 10px; font-size: 13px; line-height: 1.45; }
+#menu .row button { display: inline-block; width: auto; text-align: center;
+                    border: 1px solid var(--baseline); padding: 5px 12px; }
+#menu .row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+#menu .row button.danger { color: var(--critical);
+                           border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
 #menu .askfield { display: block; width: 260px; margin: 2px 0 0; padding: 7px 12px; font: inherit;
                   font-size: 13px; border-radius: 10px; border: 1px solid var(--baseline);
                   background: var(--surface-1); color: var(--text-primary); }
@@ -348,6 +361,17 @@ pre .t { color: var(--c-type); }
            color: var(--text-secondary); }
 #menu button { display: block; width: 100%; text-align: left; border: 0;
                background: transparent; padding: 6px 10px; border-radius: 8px; }
+/* a menu of actions rather than names: the choice in bold, what it does under
+   it in a muted line, and a title that says what the menu is for */
+#menu.opts { min-width: 280px; max-width: 380px; }
+#menu.opts .menu-label { font-size: 12.5px; font-weight: 650; color: var(--text-primary);
+                         padding: 4px 10px 8px; }
+#menu .opt { padding: 8px 10px; white-space: normal; }
+#menu .opt b { display: block; font-weight: 650; font-size: 13px; }
+#menu .opt .hint { display: block; font-size: 11.5px; line-height: 1.4; margin-top: 1px;
+                   color: var(--muted); font-weight: 400; }
+#menu .opt[disabled] b { color: var(--muted); }
+#menu .opt.danger b { color: var(--critical); }
 #menu button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 #menu button[disabled] { color: var(--muted); cursor: default; }
 #menu button[disabled]:hover { background: transparent; }
@@ -358,87 +382,117 @@ pre .t { color: var(--c-type); }
   <h1>mh — checkpoint map</h1>
   <span class="badge warn" id="robadge" hidden>read-only</span>
   <span class="hub" id="hubpath"></span>
-  <span class="muted" id="current" style="font-size:12px"></span>
   <span class="spacer"></span>
-  <button id="golive" hidden title="Jump to the session running right now">● live session</button>
-  <label class="muted" id="budget-label" style="font-size:12px" title="Token budget for the next mh load — the map marks the sessions that fit">budget
-    <input type="number" id="budget" min="0" step="500"
-           style="width:90px;display:inline-block;margin-left:6px">
-  </label>
-  <button id="tmpl" title="Stage template: default names for the checkpoints ahead">template ▾</button>
-  <button id="newckpt" class="mint">+ checkpoint</button>
-  <button id="reload">refresh</button>
+  <button id="golive" hidden title="Show or hide the live session panel">● live session</button>
+  <button id="newckpt" class="mint" title="New checkpoint — it becomes current">+ checkpoint</button>
+  <button id="reload" title="Re-read the hub">refresh</button>
 </header>
 
 <main>
-  <p class="tagline">Everything your sessions learned, one checkpoint at a time.</p>
-  <section>
-    <h2>Timeline</h2>
+  <section id="mapsec">
+    <div class="sechead">
+      <h2>Timeline</h2>
+      <span class="meta" id="current"></span>
+      <span class="spacer"></span>
+      <label class="meta" id="budget-label" title="Token budget of the next mh load — the map marks the sessions that fit">load budget
+        <input type="number" id="budget" min="0" step="500"
+               style="width:90px;display:inline-block;margin:0 4px"> tokens</label>
+      <label class="toggle" id="tree-label" title="Preview mh load --tree: whole nodes — every checkpoint in the pack brings the sub-checkpoints of its node (from inside design, all of design)"><input type="checkbox" id="tree"> with sub-checkpoints</label>
+    </div>
     <div class="mapwrap"><svg id="map" role="img" aria-label="Checkpoint timeline"></svg></div>
     <div class="legend">
       <span><i class="key" style="background:var(--accent)"></i> in the next <code>mh load</code></span>
-      <span><i class="key" style="background:var(--neutral-mark)"></i> not loaded</span>
+      <span><i class="key" style="background:var(--neutral-mark)"></i> not in the next load</span>
       <span><i class="key" style="background:transparent;border:2px solid var(--text-primary)"></i> current pointer</span>
       <span id="legend-ahead" hidden><i class="key" style="background:transparent;border:2px dashed var(--muted)"></i> stage ahead (template)</span>
-      <span class="muted">arc = link (loads together) · node size = sessions · click a node for its actions</span>
+      <span><i class="key" style="background:var(--neutral-mark);width:7px;height:7px"></i> sub-checkpoint (indented: a scope under its parent, loads with it)</span>
+      <span class="muted">arc = link: loads together when the next load reaches it (purple), grey when it does not · node size = sessions · click a node for its actions</span>
     </div>
-  </section>
-
-  <section id="memsec" hidden>
-    <div class="row" style="align-items:baseline">
-      <h2>Project memory</h2>
-      <span class="muted" id="memmeta" style="font-size:12px"></span>
-      <span class="spacer"></span>
-      <button id="memtoggle" title="Show or hide the notes"></button>
-    </div>
-    <div id="memlist"></div>
   </section>
 
   <section id="ckptsec" hidden>
-    <h2 id="ckpttitle"></h2>
-    <div class="row" style="margin-bottom:12px" id="ckactions">
-      <button id="ck-current" title="Point the current pointer here: the next mh save and mh load use it">make current</button>
-      <button id="ck-another" title="One more checkpoint at this stage — design, design-2, design-3…">+ another here</button>
-      <button id="ck-rename">rename</button>
-      <button id="ck-link">link to…</button>
-      <button id="ck-unlink">unlink…</button>
-      <span class="spacer" style="flex:1"></span>
-      <button id="ck-delete" class="danger">delete checkpoint</button>
+    <div class="sechead">
+      <h2><span class="kind">Checkpoint</span><span id="ckpttitle"></span></h2>
+      <span class="meta" id="ckptmeta"></span>
+      <span class="spacer"></span>
+      <button class="close" id="ck-close" title="Close this panel">×</button>
     </div>
+    <div class="toolbar" id="ckactions" style="margin-bottom:12px">
+      <button id="ck-current" title="Point the current pointer here: the next mh save and mh load use it">make current</button>
+      <button id="ck-rename">rename…</button>
+      <button id="ck-link" title="Linked checkpoints load together">link to…</button>
+      <button id="ck-unlink">unlink…</button>
+      <button id="ck-another">+ another take</button>
+      <button id="ck-sub" title="A smaller scope under this checkpoint — loads together with it">+ sub-checkpoint…</button>
+      <button id="ck-stage" hidden title="Edit the template's list of stages around this one">stage ▾</button>
+      <span class="spacer"></span>
+      <button id="ck-delete" class="danger">delete…</button>
+    </div>
+    <div class="mrel" id="subs" hidden style="margin:-4px 0 10px"></div>
+    <div class="meta" id="sessum" style="margin-bottom:4px"></div>
     <div id="sessions"></div>
   </section>
 
   <section id="sessec" hidden>
-    <h2 id="sestitle"></h2>
+    <div class="sechead">
+      <h2><span class="kind">Session</span><span id="sestitle"></span></h2>
+      <span class="meta" id="sesinfo"></span>
+      <span class="spacer"></span>
+      <button class="close" id="ses-close" title="Close this panel">×</button>
+    </div>
     <div id="prov" class="prov"></div>
     <div id="exchanges"></div>
   </section>
 
   <section id="livesec" hidden>
-    <h2>Live session<span class="livedot" id="livedot"></span></h2>
-    <div class="row liverow">
-      <span class="hub" id="livekey"></span>
-      <span class="muted" id="livemeta" style="font-size:12px"></span>
+    <div class="sechead">
+      <h2>Live session<span class="livedot" id="livedot"></span></h2>
       <span class="spacer"></span>
-      <button id="live-follow">following…</button>
-      <button id="live-newest" hidden title="This session is not the newest transcript of the project">follow the newest</button>
-      <label class="muted"><input type="checkbox" id="livefull" checked> full output</label>
-      <label class="muted"><input type="checkbox" id="livewatch" checked> watch</label>
-      <button id="live-discard" hidden>discard live edits</button>
-      <button id="live-save" class="mint">save to checkpoint</button>
-    </div>
-    <div id="liveex"></div>
-
-    <div class="composer" id="composer">
-      <div class="palette" id="palette" hidden></div>
-      <textarea id="say" placeholder="type to this session — it lands in its terminal as if you typed it · / for its skills and commands"></textarea>
-      <div class="row" style="margin-top:8px">
-        <span class="to" id="sayto"></span>
-        <button id="say-slash" title="the session's skills and commands">/ commands</button>
-        <button id="say-send" class="primary">send ⌘⏎</button>
+      <div class="toolbar">
+        <button id="live-follow" hidden title="Follow another transcript of this project">switch session ▾</button>
+        <button id="live-newest" hidden title="This session is not the newest transcript of the project">follow the newest</button>
+        <span class="meta" title="What the panel shows, nothing more — the dialog always stays, and the agent is not affected either way">show</span>
+        <label class="toggle" title="Ticked, the agent's thinking shows between its replies; unticked, it is left out of the page"><input type="checkbox" id="livethink" checked> thinking</label>
+        <label class="toggle" title="Ticked, every tool call shows where it happened, its arguments one click away; unticked, they are left out of the page"><input type="checkbox" id="livetools" checked> tool calls</label>
+        <button id="live-discard" hidden class="danger">discard live edits…</button>
       </div>
     </div>
+    <div class="status">
+      <span class="hub" id="livekey"></span>
+      <span class="meta" id="livemeta"></span>
+    </div>
+    <div class="savebox" id="savebox" hidden>
+      <div class="sechead" style="margin-bottom:6px">
+        <h3>Save this session</h3>
+        <span class="badge" id="livesaved" hidden></span>
+        <span class="spacer"></span>
+        <label class="meta" title="The checkpoint the session is stored in — another one moves it there">to <select id="saveto"></select></label>
+      </div>
+      <label class="choice"><input type="radio" name="savekind" value="dialog" checked>
+        <b>Dialog</b><span class="hint" id="savedialoghint"></span></label>
+      <label class="choice"><input type="radio" name="savekind" value="summary">
+        <b>Summary</b><span class="hint" id="savesummaryhint"></span></label>
+      <div id="savefocusrow" hidden style="margin:2px 0 2px 26px">
+        <input type="text" id="savefocus" placeholder="focus the summary on… (optional — like /compact <instructions>)">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="savego" class="mint">Save</button>
+        <span class="meta" id="savenote"></span>
+      </div>
+    </div>
+    <div id="liveex"></div>
   </section>
+
+  <section id="memsec" hidden>
+    <div class="sechead">
+      <h2>Project memory</h2>
+      <span class="meta" id="memmeta"></span>
+      <span class="spacer"></span>
+      <button id="memtoggle" title="Show or hide the notes"></button>
+    </div>
+    <div id="memlist"></div>
+  </section>
+</main>
 </main>
 
 <div id="toast"></div>
@@ -454,7 +508,7 @@ const $ = (id) => document.getElementById(id);
 const CFG = { budget: 20000, readOnly: false, hub: "", version: "",
               ...JSON.parse($("mh-config").textContent || "{}") };
 const RO = !!CFG.readOnly;
-let DATA = null, SEL_CK = null;
+let DATA = null, SEL_CK = null, SEL_SES = null;  // the open checkpoint and session
 
 function toast(msg, kind) {
   const t = $("toast");
@@ -526,13 +580,14 @@ function menu(anchor, label, options, emptyMsg, onPick) {
 // the same popover with one text field, for the two places that need a name
 // typed — prompt() blocks the page, matches nothing on it, and cannot be
 // driven by an agent's browser
-function ask(anchor, label, initial, onSubmit) {
+function ask(anchor, label, initial, onSubmit, opts = {}) {
   closeMenu();
   const field = el("input", { type: "text", class: "askfield", value: initial || "",
-                              placeholder: "letters and digits of any script" });
+                              placeholder: opts.placeholder || "letters and digits of any script" });
   const submit = () => {
     const v = field.value.trim();
-    if (!v || v === initial) { closeMenu(); return; }
+    // an optional field may submit empty; a name has to change to mean anything
+    if (!opts.optional && (!v || v === initial)) { closeMenu(); return; }
     closeMenu(); onSubmit(v);
   };
   field.addEventListener("keydown", (e) => {
@@ -546,6 +601,35 @@ function ask(anchor, label, initial, onSubmit) {
   openMenu(m, anchor);
   field.focus();
   field.select();
+}
+
+// a menu of actions: each choice a bold word with a line of explanation under
+// it, so the choice reads before the detail (menu() lists names; this lists
+// things to do)
+function optionMenu(anchor, title, options) {
+  closeMenu();
+  const m = el("div", { id: "menu", class: "opts" }, el("div", { class: "menu-label", text: title }));
+  options.forEach((o) => {
+    const b = el("button", { class: "opt" + (o.danger ? " danger" : ""), disabled: o.disabled ? "" : null,
+      onclick: (e) => { e.stopPropagation(); closeMenu(); o.pick(); } }, el("b", { text: o.label }));
+    if (o.hint) b.appendChild(el("span", { class: "hint", text: o.hint }));
+    m.appendChild(b);
+  });
+  openMenu(m, anchor);
+}
+
+// a question with a red answer — deletes and discards confirm here, in the same
+// popover as every other choice, so nothing blocks the page or hides from an
+// agent driving it (the browser's own dialog did both)
+function confirmMenu(anchor, text, verb, onConfirm) {
+  closeMenu();
+  const m = el("div", { id: "menu" },
+    el("div", { class: "confirmtext", text }),
+    el("div", { class: "row end" },
+      el("button", { text: "cancel", onclick: (e) => { e.stopPropagation(); closeMenu(); } }),
+      el("button", { class: "danger", text: verb,
+                     onclick: (e) => { e.stopPropagation(); closeMenu(); onConfirm(); } })));
+  openMenu(m, anchor);
 }
 
 function el(tag, props, ...kids) {
@@ -871,46 +955,108 @@ function drawMap() {
   const host = $("map");
   host.textContent = "";
   const cps = DATA.checkpoints;
-  if (!cps.length) {
+  const ahead = DATA.template ? DATA.template.stages.filter((st) => !st.exists) : [];
+  if (!cps.length && !ahead.length) {
+    // a hub with nothing in it yet: say what comes first, quietly — this is
+    // a beginning, not an error
+    host.setAttribute("width", 640);  // room for the sentence, no scrollbar for it
     host.setAttribute("height", 40);
     host.appendChild(svg("text", { x: 4, y: 22, fill: "var(--muted)",
-      text: "no checkpoints yet — create one to begin" }));
+      text: "No checkpoints yet — press + checkpoint to name the first one (a stage template is set in the terminal: mh template <name>)." }));
     return;
   }
   const loadedSet = new Set(DATA.load.loaded);
-  const inPack = new Set(DATA.load.included.map((id) => id.split("/")[0]));
+  // sessions of each checkpoint that fit the pack's budget, for the tooltip
+  const packed = new Map();
+  DATA.load.included.forEach((id) => {
+    const slug = id.split("/")[0];
+    packed.set(slug, (packed.get(slug) || 0) + 1);
+  });
   const bySlug = new Map(cps.map((c) => [c.slug, c]));
   // One column per stage; checkpoints at the same stage stack under its node.
   // The template's stages still ahead follow, dashed.
   const columns = DATA.stages.map((col) => ({ ...col, ghost: false }));
-  const ahead = DATA.template ? DATA.template.stages.filter((st) => !st.exists) : [];
   ahead.forEach((st) => columns.push({ stage: st.slug, name: st.name, members: [], ghost: true }));
-  // stacked takes are named beside their node, so a column is at least as
+  // A column's rows: each take on the spine, followed by its sub-checkpoints
+  // (a scope under the node) indented one step per level, in creation order.
+  const kidsOf = (slug) => cps.filter((c) => c.parent === slug);
+  const INDENT = 24;
+  const rowsOf = (slug, depth, k) => [{ slug, depth, k },
+    ...kidsOf(slug).flatMap((kid) => rowsOf(kid.slug, depth + 1, 0))];
+  columns.forEach((col) => { col.rows = col.members.flatMap((slug, k) => rowsOf(slug, 0, k)); });
+  const label = (row) => (row.depth ? bySlug.get(row.slug).name : row.slug) +
+    (row.slug === DATA.current ? " · current" : "");
+  // sub-checkpoints are named beside their node, so a column is at least as
   // wide as the longest such name
-  const beside = Math.max(0, ...columns.flatMap((col) => col.members.slice(1).map((slug) =>
-    (slug.length + (slug === DATA.current ? 10 : 0)) * 6.6 + 40)));
+  const beside = Math.max(0, ...columns.flatMap((col) => col.rows
+    .filter((row) => row.depth)
+    .map((row) => row.depth * INDENT + label(row).length * 6.6 + 72)));  // + the band, below
   const step = Math.max(120, beside, Math.min(200, 900 / columns.length));
-  const padX = 60, arcRoom = 26 + Math.min(cps.length, 6) * 11, stackGap = 46;
-  const deepest = Math.max(1, ...columns.map((col) => col.members.length));
+  const padX = 60, arcRoom = 26 + Math.min(cps.length, 6) * 11, stackGap = 44;
   const W = padX * 2 + step * (columns.length - 1);
-  const axisY = arcRoom + 46, H = axisY + 78 + (deepest - 1) * stackGap;
+  const axisY = arcRoom + 46;
   host.setAttribute("width", Math.max(W, 320));
-  host.setAttribute("height", H);
 
   const x = (i) => padX + i * step;
   const maxSessions = Math.max(1, ...cps.map((c) => c.sessions.length));
   const r = (c) => 8 + 12 * Math.sqrt(c.sessions.length / maxSessions);
-  const pos = new Map();  // slug -> where its node is drawn
-  columns.forEach((col, i) => col.members.forEach((slug, k) =>
-    pos.set(slug, { x: x(i), y: axisY + k * stackGap, r: r(bySlug.get(slug)) })));
-
-  host.appendChild(svg("line", { x1: padX - 30, y1: axisY, x2: W - padX + 30, y2: axisY,
-    stroke: "var(--baseline)", "stroke-width": 2 }));
-  // a stack's spine, from the node on the axis down to its last member
+  const radius = (row) => {
+    const c = bySlug.get(row.slug);
+    return row.depth ? Math.max(6, r(c) * 0.7) : r(c);
+  };
+  // where each node is drawn: rows go down a column, each given the room the
+  // row above needs — its node, and a take's name (and "current") under it
+  const pos = new Map();  // slug -> {x, y, r, depth}
+  let maxY = axisY;
   columns.forEach((col, i) => {
-    if (col.members.length < 2) return;
-    host.appendChild(svg("line", { x1: x(i), y1: axisY, x2: x(i),
-      y2: axisY + (col.members.length - 1) * stackGap, stroke: "var(--baseline)", "stroke-width": 2 }));
+    let y = axisY;
+    col.rows.forEach((row, j) => {
+      const rr = radius(row);
+      if (j) {
+        const prev = col.rows[j - 1], pr = pos.get(prev.slug);
+        const under = pr.r + (prev.depth ? 0 : 26 + (prev.slug === DATA.current ? 14 : 0));
+        y += Math.max(stackGap, under + rr + 8);
+      }
+      pos.set(row.slug, { x: x(i) + row.depth * INDENT, y, r: rr, depth: row.depth });
+      maxY = Math.max(maxY, y);
+    });
+  });
+  host.setAttribute("height", maxY + 78);
+
+  // The flow between stages. Takes at one stage are parallel, independent
+  // paths through it, so every take of a column connects to every take of
+  // the next — a fork and a join, not a stack — and the stubs at both ends
+  // say the line goes on.
+  const takesOf = (col, i) => col.ghost
+    ? [{ x: x(i), y: axisY, r: 8 }]
+    : col.rows.filter((row) => !row.depth).map((row) => pos.get(row.slug));
+  // A fork or join turns in a band just left of the column it enters, where
+  // no name reaches (the column width keeps it clear), so a branch never runs
+  // through another node's sub-checkpoints.
+  const BAND = 30, ROUND = 8;
+  const edge = (a, b) => {
+    const vx = b.x - BAND, dir = b.y > a.y ? 1 : -1;
+    const d = a.y === b.y
+      ? `M ${a.x} ${a.y} H ${b.x}`
+      : `M ${a.x} ${a.y} H ${vx - ROUND} Q ${vx} ${a.y} ${vx} ${a.y + dir * ROUND}` +
+        ` V ${b.y - dir * ROUND} Q ${vx} ${b.y} ${vx + ROUND} ${b.y} H ${b.x}`;
+    return svg("path", { d, fill: "none", stroke: "var(--baseline)", "stroke-width": 2 });
+  };
+  host.appendChild(svg("line", { x1: padX - 30, y1: axisY, x2: x(0), y2: axisY,
+    stroke: "var(--baseline)", "stroke-width": 2 }));
+  host.appendChild(svg("line", { x1: x(columns.length - 1), y1: axisY, x2: W - padX + 30, y2: axisY,
+    stroke: "var(--baseline)", "stroke-width": 2 }));
+  columns.forEach((col, i) => {
+    if (i + 1 < columns.length) {
+      const next = takesOf(columns[i + 1], i + 1);
+      takesOf(col, i).forEach((a) => next.forEach((b) => host.appendChild(edge(a, b))));
+    }
+    // a sub-checkpoint hangs from its parent: down, then across to its node
+    col.rows.filter((row) => row.depth).forEach((row) => {
+      const p = pos.get(bySlug.get(row.slug).parent), q = pos.get(row.slug);
+      host.appendChild(svg("path", { d: `M ${p.x} ${p.y + p.r} V ${q.y} H ${q.x - q.r}`,
+        fill: "none", stroke: "var(--baseline)", "stroke-width": 1.5 }));
+    });
   });
 
   // link arcs, drawn first so nodes sit above them
@@ -922,8 +1068,14 @@ function drawMap() {
       // two takes at one stage: a small arc beside the spine
       ? `M ${l.x + 10} ${l.y} Q ${l.x + 34} ${(l.y + q.y) / 2} ${q.x + 10} ${q.y}`
       : `M ${l.x} ${l.y - 12} Q ${(l.x + q.x) / 2} ${Math.min(l.y, q.y) - 12 - lift * 2} ${q.x} ${q.y - 12}`;
-    const path = svg("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2, opacity: 0.55 });
-    path.addEventListener("mousemove", (e) => tip(e, [`link: ${a} — ${b}`, "these load together"]));
+    // a link is only in play when the next load reaches it: from the current
+    // checkpoint (and its parents) out along the links — an arc elsewhere on
+    // the map is a promise for another day, and is drawn grey to say so
+    const live = loadedSet.has(a) && loadedSet.has(b);
+    const path = svg("path", { d, fill: "none", stroke: live ? "var(--accent)" : "var(--neutral-mark)",
+      "stroke-width": 2, opacity: live ? 0.55 : 0.7, "stroke-dasharray": live ? null : "5 4" });
+    path.addEventListener("mousemove", (e) => tip(e, [`link: ${a} — ${b}`, "these load together",
+      live ? "in the next mh load" : `not in the next mh load — it starts at ${DATA.current || "no checkpoint"} and does not reach this link`]));
     path.addEventListener("mouseleave", untip);
     host.appendChild(path);
   });
@@ -937,9 +1089,11 @@ function drawMap() {
         fill: "var(--text-secondary)", "font-size": "11", "font-weight": "600",
         text: col.stage + (stacked ? ` ×${col.members.length}` : "") }));
     }
-    col.members.forEach((slug, k) => {
-      const c = bySlug.get(slug), p = pos.get(slug);
-      const active = inPack.has(slug) || (loadedSet.has(slug) && DATA.load.included.length === 0);
+    col.rows.forEach((row) => {
+      const slug = row.slug, c = bySlug.get(slug), p = pos.get(slug);
+      // purple = in the next load's set, whether or not it has sessions to
+      // contribute yet — the same set the status line names
+      const active = loadedSet.has(slug);
       const isCurrent = slug === DATA.current;
       const g = svg("g", { style: "cursor:pointer" });
       // generous hit target, independent of mark size
@@ -953,28 +1107,34 @@ function drawMap() {
         g.appendChild(svg("circle", { cx: p.x, cy: p.y, r: p.r + 5, fill: "none",
           stroke: "var(--text-primary)", "stroke-width": 2 }));
       }
-      if (k === 0) {
+      if (!row.depth) {
+        // a take: a node of its own in the flow, named under it
         g.appendChild(svg("text", { x: p.x, y: p.y + p.r + 20, "text-anchor": "middle",
           fill: "var(--text-primary)", "font-weight": "600", text: slug }));
         if (isCurrent) g.appendChild(svg("text", { x: p.x, y: p.y + p.r + 34, "text-anchor": "middle",
           fill: "var(--text-primary)", "font-weight": "650", text: "current" }));
-        g.appendChild(svg("text", { x: p.x, y: p.y - p.r - 10, "text-anchor": "middle",
+        if (row.k === 0) g.appendChild(svg("text", { x: p.x, y: p.y - p.r - 10, "text-anchor": "middle",
           fill: "var(--muted)", text: c.created.slice(0, 10) }));
       } else {
-        // a stacked take: named beside its node, where the next one is not
+        // a sub-checkpoint: named beside its node, where the next row is not
         g.appendChild(svg("text", { x: p.x + p.r + 9, y: p.y + 4, "font-size": "11.5",
-          fill: "var(--text-primary)", "font-weight": isCurrent ? "650" : "600",
-          text: slug + (isCurrent ? " · current" : "") }));
+          fill: "var(--text-secondary)", "font-weight": isCurrent ? "650" : "500", text: label(row) }));
       }
       const toks = c.sessions.reduce((s, x) => s + x.tokens, 0);
+      const fit = packed.get(slug) || 0;
+      const loadNote = !active ? "not in the next mh load"
+        : !c.sessions.length ? "in the next mh load — no sessions yet"
+        : fit === c.sessions.length ? `in the next mh load — all ${fit} session${fit === 1 ? "" : "s"} fit the budget`
+        : `in the next mh load — ${fit} of ${c.sessions.length} sessions fit the budget`;
       g.addEventListener("mousemove", (e) => tip(e, [
-        slug + (col.stage !== slug ? ` · at ${col.stage}` : ""),
+        slug + (c.parent ? ` · under ${c.parent}` : col.stage !== slug ? ` · at ${col.stage}` : ""),
         `created ${c.created.slice(0, 10)} · ${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"} · ~${toks} tokens`,
-        active ? "included in the next mh load" : "not in the next mh load",
+        loadNote,
         RO ? "click to open" : "click for actions",
       ]));
       g.addEventListener("mouseleave", untip);
-      g.addEventListener("click", () => { untip(); if (RO) selectCheckpoint(slug); else nodeMenu(g, c, col); });
+      // the actions come to the node: the panel can be a long way down
+      g.addEventListener("click", () => { untip(); if (RO) selectCheckpoint(slug, true); else nodeMenu(g, c); });
       host.appendChild(g);
     });
     if (col.ghost) {
@@ -1133,60 +1293,131 @@ function niceStamp(file) {
   return `${s.slice(0, 10)} ${s.slice(11, 13)}:${s.slice(13, 15)}`;
 }
 
-function selectCheckpoint(slug) {
+// the stamp of a created checkpoint: "2026-09-03_095147" -> "2026-09-03 09:51"
+function niceCreated(s) {
+  return `${s.slice(0, 10)} ${s.slice(11, 13)}:${s.slice(13, 15)}`;
+}
+
+function closeSession() {
+  SEL_SES = null; $("sessec").hidden = true;
+  document.querySelectorAll("#sessions .srow.open").forEach((r) => r.classList.remove("open"));
+}
+function closeCheckpoint() { SEL_CK = null; $("ckptsec").hidden = true; closeSession(); }
+
+// Open a checkpoint's panel: its facts, the buttons that apply to it (the rest
+// greyed rather than failing), and its sessions. Re-run on every refresh, so
+// the panel — and the session open under it — survive a change made elsewhere.
+function selectCheckpoint(slug, scroll) {
+  if (slug !== SEL_CK) closeSession();
   SEL_CK = slug;
-  $("sessec").hidden = true;
   const c = DATA.checkpoints.find((x) => x.slug === slug);
-  if (!c) { $("ckptsec").hidden = true; return; }
+  if (!c) { closeCheckpoint(); return; }
   $("ckptsec").hidden = false;
-  const at = c.stage && c.stage !== c.slug ? ` · at ${c.stage}` : "";
-  $("ckpttitle").textContent = `${c.slug}${at} · created ${c.created.replace("_", " ")}`;
-  $("ck-current").disabled = c.slug === DATA.current;
-  $("ck-current").textContent = c.slug === DATA.current ? "✓ current" : "make current";
-  const omitted = new Set(DATA.load.omitted);
+  const stage = c.stage || c.slug, n = c.sessions.length;
+  const toks = c.sessions.reduce((s, x) => s + x.tokens, 0);
+  $("ckpttitle").textContent = c.slug;
+  $("ckptmeta").textContent = [
+    c.parent ? `under ${c.parent}` : stage !== c.slug ? `at stage ${stage}` : null,
+    `created ${niceCreated(c.created)}`,
+  ].filter(Boolean).join(" · ");
+  // its sub-checkpoints, one chip each — the scopes inside this one
+  const kids = DATA.checkpoints.filter((x) => x.parent === c.slug);
+  const subs = $("subs");
+  subs.hidden = !kids.length;
+  subs.textContent = "";
+  if (kids.length) {
+    subs.appendChild(el("span", { text: `${kids.length} sub-checkpoint${kids.length === 1 ? "" : "s"}:` }));
+    kids.forEach((kid) => subs.appendChild(el("button", { class: "memchip", text: kid.name,
+      title: `${kid.slug} · ${kid.sessions.length} session${kid.sessions.length === 1 ? "" : "s"}`,
+      onclick: () => selectCheckpoint(kid.slug, true) })));
+  }
+  // the toolbar is the node menu laid flat: same actions, same conditions
+  const A = checkpointActions(c);
+  $("ck-current").disabled = A.current.disabled;
+  $("ck-current").textContent = A.current.disabled ? "✓ current" : "make current";
+  $("ck-link").disabled = A.link.disabled;
+  $("ck-link").title = A.link.hint;
+  $("ck-unlink").disabled = A.unlink.disabled;
+  $("ck-unlink").title = A.unlink.hint;
+  $("ck-another").disabled = A.take.disabled;
+  $("ck-another").title = A.take.hint;
+  $("ck-stage").hidden = !A.before;
+  const included = new Set(DATA.load.included), omitted = new Set(DATA.load.omitted);
+  const inNext = c.sessions.filter((s) => included.has(s.id)).length;
+  const skippedN = c.sessions.filter((s) => s.skipped).length;
+  $("sessum").textContent = n ? [
+    `${n} session${n === 1 ? "" : "s"}`, `~${toks} tokens`,
+    inNext ? `${inNext} in the next mh load` : null,
+    skippedN ? `${skippedN} skipped on load` : null,
+  ].filter(Boolean).join(" · ") : "";
   const list = $("sessions");
   list.textContent = "";
-  if (!c.sessions.length) {
+  if (!n) {
     list.appendChild(el("div", { class: "empty",
       text: "Nothing here yet — this checkpoint is waiting for its first session." }));
   }
+  const canMove = DATA.checkpoints.length > 1;
   c.sessions.forEach((s) => {
     const who = sessionAvatar(s.model, s.file);
     const av = el("div", { class: "avatar", text: who.text, title: who.title });
     av.style.background = who.color;
     const title = el("div", { class: "stitle", text: niceStamp(s.file) },
       el("span", { class: "skey", text: "‹" + sessionKey(s.file) + "›" }));
+    if (included.has(s.id)) title.appendChild(el("span", { class: "badge accent", text: "in the next load" }));
     if (omitted.has(s.id)) title.appendChild(el("span", { class: "badge", text: "over budget" }));
+    if (s.skipped) title.appendChild(el("span", { class: "badge", text: "skipped on load" }));
     if (s.compacted) title.appendChild(el("span", { class: "badge", text: "compacted" }));
     if (s.legacy) title.appendChild(el("span", { class: "badge", text: "Q&A format" }));
     if (!s.editable && !s.compacted) title.appendChild(el("span", { class: "badge warn", text: "read-only" }));
     // a compacted session summarises N exchanges but stores none: "0" would read as empty
     const meta = (s.compacted || s.exchanges === null)
       ? `~${s.tokens} tokens` : `${s.exchanges} exch. · ~${s.tokens} tokens`;
-    const row = el("div", { class: "srow" },
+    // the load box: a click here is a decision about the session, not a request to open it
+    const box = el("input", { type: "checkbox", disabled: RO ? "" : null, title: s.skipped
+      ? "Skipped: mh load leaves this session out — tick to load it again"
+      : "Loads with its checkpoint — untick and mh load skips it" });
+    box.checked = !s.skipped;
+    box.addEventListener("change", () => act("/api/session/skip",
+      { ckpt: c.slug, file: s.file, skipped: !box.checked },
+      box.checked ? `${sessionKey(s.file)} loads again` : `${sessionKey(s.file)} skipped on load`));
+    const row = el("div", { class: "srow" + (s.skipped ? " skipped" : "") + (s.file === SEL_SES ? " open" : ""),
+                            "data-file": s.file },
+      el("label", { class: "loadbox", onclick: (e) => e.stopPropagation() }, box),
       av,
       el("div", { class: "smain" },
         title,
         el("div", { class: "spreview", text: meta + (s.preview ? " — " + s.preview : "") })),
       RO ? null :
         el("div", { class: "sacts" },
-          el("button", { text: "move…",
+          el("button", { text: "move…", disabled: canMove ? null : "",
+            title: canMove ? "Move this session to another checkpoint" : "No other checkpoint to move into",
             onclick: (e) => { e.stopPropagation(); moveSession(s, e.currentTarget); } }),
-          el("button", { class: "danger", text: "delete",
-            onclick: (e) => { e.stopPropagation(); deleteSession(s); } })));
+          el("button", { class: "danger", text: "delete…",
+            onclick: (e) => { e.stopPropagation(); deleteSession(s, e.currentTarget); } })));
     row.addEventListener("click", () => openSession(c.slug, s.file));
     list.appendChild(row);
   });
+  if (SEL_SES && !c.sessions.some((s) => s.file === SEL_SES)) closeSession();
+  if (scroll) $("ckptsec").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // --- session panel ---------------------------------------------------------
 
 async function openSession(slug, file) {
-  SEL_CK = slug;
+  SEL_CK = slug; SEL_SES = file;
   const data = await api(`/api/session?ckpt=${encodeURIComponent(slug)}&file=${encodeURIComponent(file)}`);
   $("sessec").hidden = false;
-  $("sestitle").textContent = `${data.checkpoint} / ${data.file}` +
-    (data.editable && !RO ? "" : "  — read-only");
+  const title = $("sestitle");
+  title.textContent = niceStamp(data.file);
+  title.appendChild(el("span", { class: "skey", text: "‹" + sessionKey(data.file) + "›" }));
+  const info = $("sesinfo");
+  info.textContent = `in ${data.checkpoint} · ${data.file}`;
+  if (data.compacted) info.appendChild(el("span", { class: "badge", text: "compacted" }));
+  if (data.legacy) info.appendChild(el("span", { class: "badge", text: "Q&A format" }));
+  if (!(data.editable && !RO)) info.appendChild(el("span", { class: "badge warn", text: "read-only" }));
+  // mark the row of the list this panel came from
+  document.querySelectorAll("#sessions .srow").forEach((r) =>
+    r.classList.toggle("open", r.dataset.file === file));
   const host = $("exchanges");
   host.textContent = "";
   drawProvenance(data);
@@ -1249,11 +1480,11 @@ function exchangeCard(data, ex) {
     el("span", { class: "spacer" }));
   if (data.editable && !RO) {
     head.appendChild(el("button", { text: "edit", onclick: () => editCard(card, data, ex) }));
-    head.appendChild(el("button", { class: "danger", text: "delete", onclick: () => {
-      if (!confirm(`Delete exchange ${ex.index}? The hub keeps it in git history.`)) return;
-      act("/api/exchange/delete", { ckpt: data.checkpoint, file: data.file, index: ex.index },
-        `deleted exchange ${ex.index}`, () => openSession(data.checkpoint, data.file));
-    } }));
+    head.appendChild(el("button", { class: "danger", text: "delete…", onclick: (e) =>
+      confirmMenu(e.currentTarget, `Delete exchange ${ex.index}? The hub keeps it in git history.`,
+        "delete exchange", () =>
+          act("/api/exchange/delete", { ckpt: data.checkpoint, file: data.file, index: ex.index },
+            `deleted exchange ${ex.index}`, () => openSession(data.checkpoint, data.file))) }));
   }
   card.appendChild(head);
   const user = el("div", { class: "turn user" },
@@ -1326,6 +1557,21 @@ function followNewest(why) {
   runLive();
 }
 let LIVE_ALL = !!VIEW;        // the reader asked for the whole session (a viewer page starts with it)
+// whether the panel is on at all — the header's button switches it, and the
+// choice is remembered like the project-memory fold; a viewer page is the
+// session, so there it is always on
+const LIVE_KEY = "mh.live";
+let LIVE_SHOWN = VIEW ? true : localStorage.getItem(LIVE_KEY) !== "0";
+function applyLiveShown() {
+  $("livesec").hidden = !LIVE_SHOWN;
+  $("golive").classList.toggle("on", LIVE_SHOWN);
+  $("golive").title = LIVE_SHOWN ? "Hide the live session panel" : "Show the live session panel";
+}
+function setLiveShown(on) {
+  LIVE_SHOWN = on;
+  localStorage.setItem(LIVE_KEY, on ? "1" : "0");
+  applyLiveShown();
+}
 // which tool calls the reader has opened, kept across redraws so a poll two
 // seconds later does not close what they are in the middle of reading
 const LIVE_OPEN = new Set();
@@ -1336,10 +1582,13 @@ async function pollLive() {
   if (LIVE_EDIT !== null) return;
   const q = new URLSearchParams({ fp: (LIVE && LIVE.fp) || "" });
   if (LIVE_SID) q.set("sid", LIVE_SID);
-  if ($("livefull").checked) q.set("full", "1");
+  if (streamWanted()) q.set("full", "1");
   try {
     const d = await api("/api/live?" + q);
     LIVE_ERR = false;
+    // the hub changed under the page — a terminal `mh link` or `mh goto`, a
+    // hook's save — so the map is re-read; this poll is the page's clock
+    if (DATA && d.hub_rev && d.hub_rev !== DATA.hub_rev) await refresh();
     if (!d.present) { LIVE = null; $("livesec").hidden = true; $("golive").hidden = true; return; }
     if (LIVE_PINNED && d.newest && d.key !== d.newest) {
       const mine = (d.sessions || []).find((s) => s.key === d.key);
@@ -1359,7 +1608,6 @@ async function pollLive() {
 
 function scheduleLive() {
   clearTimeout(LIVE_TIMER);
-  if (!$("livewatch").checked) return;
   LIVE_TIMER = setTimeout(runLive, document.hidden ? LIVE_HIDDEN_MS : LIVE_POLL_MS);
 }
 async function runLive() { await pollLive(); scheduleLive(); }
@@ -1376,37 +1624,47 @@ async function liveAct(path, body, okMsg) {
   } catch (e) { toast(e.message, "err"); }
 }
 
+// Where a save of this session goes: the checkpoint it already lives in, else
+// the current one — the rule `mh save` follows when given no target.
+const saveTarget = (d) => (d.saved && d.saved.checkpoint) || d.current || "current";
+
 function drawLive() {
   const d = LIVE;
-  $("livesec").hidden = false;
+  applyLiveShown();
   $("livekey").textContent = `${d.agent} · ‹${d.key}›`;
   const n = d.exchanges.length;
   const bits = [`${n} exchange${n === 1 ? "" : "s"}`];
   if (d.pending) bits.push("answer in flight");
   if (d.edits) bits.push(`${d.edits} live edit${d.edits === 1 ? "" : "s"}`);
   if (d.stale) bits.push(`${d.stale} ignored (dialog moved)`);
-  if ($("livefull").checked && d.stream === false)
-    bits.push("full output not available for this agent");
-  const stores = `${d.would_store} exchange${d.would_store === 1 ? "" : "s"}`;
-  bits.push(d.saved
-    ? (d.saved.in_sync
-        ? `saved in ${d.saved.checkpoint} ✓`
-        : `saved in ${d.saved.checkpoint} · out of date (a save stores ${stores})`)
-    : `not saved yet (a save stores ${stores})`);
-  $("livemeta").textContent = bits.join(" · ");
-  $("live-follow").textContent = d.sessions.length > 1 ? "following ‹" + d.key + "› ▾" : "this project";
-  $("live-follow").disabled = d.sessions.length < 2;
+  if (streamWanted() && d.stream === false)
+    bits.push("thinking & tool calls not available for this agent — dialog only");
   const older = !!(d.newest && d.key !== d.newest);
-  $("live-newest").hidden = !older;
   if (older) {
     const mine = (d.sessions || []).find((s) => s.key === d.key);
-    bits.push(mine ? `quiet for ${niceIdle(mine.idle)} · newest is ‹${d.newest}›` : `newest is ‹${d.newest}›`);
-    $("livemeta").textContent = bits.join(" · ");
+    if (mine) bits.push(`quiet for ${niceIdle(mine.idle)}`);
+    bits.push(`newest is ‹${d.newest}›`);
   }
-  $("livedot").className = "livedot" + ($("livewatch").checked ? "" : " off");
+  // the saved state is one coloured badge; what a save would store sits beside it
+  const stores = `a save stores ${d.would_store} exchange${d.would_store === 1 ? "" : "s"}`;
+  const saved = $("livesaved");
+  saved.hidden = false;
+  if (!d.saved) {
+    saved.className = "badge"; saved.textContent = "not saved yet"; bits.push(stores);
+  } else if (d.saved.compacted) {
+    saved.className = "badge ok"; saved.textContent = `compacted summary in ${d.saved.checkpoint}`;
+  } else if (d.saved.in_sync) {
+    saved.className = "badge ok"; saved.textContent = `saved in ${d.saved.checkpoint} ✓`;
+  } else {
+    saved.className = "badge warn"; saved.textContent = `saved in ${d.saved.checkpoint} · out of date`;
+    bits.push(stores);
+  }
+  $("livemeta").textContent = bits.join(" · ");
+  $("live-follow").hidden = d.sessions.length < 2;
+  $("live-newest").hidden = !older;
   $("live-discard").hidden = RO || !d.edits;
-  drawComposer(d.terminal || {});
-  $("live-save").hidden = RO;
+  $("live-discard").textContent = `discard ${d.edits} live edit${d.edits === 1 ? "" : "s"}…`;
+  drawSaveBox(d);
   $("golive").hidden = false;
   const host = $("liveex");
   host.textContent = "";
@@ -1421,198 +1679,20 @@ function drawLive() {
     host.appendChild(el("button", { class: "earlier", text: `show only the latest ${LIVE_TAIL}`,
       onclick: () => { LIVE_ALL = false; drawLive(); } }));
   }
-  shown.forEach((ex) => host.appendChild(liveCard(ex)));
+  shown.forEach((ex) => host.appendChild(liveCard(visibleParts(ex))));
 }
 
-// Where a typed message would land, or why it would not. Never a guess: the
-// server re-checks the pane and the process every poll, so this line is the
-// current truth rather than what was true at session start.
-function drawComposer(term) {
-  const ok = !!term.pane && !RO;
-  $("composer").hidden = RO;
-  $("sayto").textContent = term.pane
-    ? `→ tmux pane ${term.pane}${term.how ? " · " + term.how : ""}`
-    : (term.reason || "no terminal found for this session");
-  $("sayto").className = "to" + (term.pane ? "" : " off");
-  $("say").disabled = !ok;
-  $("say-send").disabled = !ok;
-  $("say-slash").disabled = !ok;
-}
-
-async function say() {
-  const text = $("say").value.trim();
-  if (!text) return;
-  $("say-send").disabled = true;
-  closePalette();
-  try {
-    const r = await post("/api/live/say", { text, sid: LIVE_SID });
-    $("say").value = "";
-    const cmd = slashState(text);
-    toast(cmd ? `sent /${cmd.name} to ${r.pane}` : `sent to ${r.pane}`, "ok");
-    LIVE = null;
-    await pollLive();   // the turn shows up as soon as the agent writes it
-  } catch (e) {
-    toast(e.message, "err");
-  } finally {
-    $("say-send").disabled = false;
-  }
-}
-
-// --- the composer's palette ------------------------------------------------
-// What the box offers when a message starts with "/": the CLI's own skills
-// and commands, read from disk by mh, and the models behind /model. The text
-// is composed here and pasted into the session — the CLI runs it, exactly as
-// if it had been typed at its prompt, so nothing here needs to know what a
-// command does.
-
-// The slash command a message is, or null for prose: {name, args} with args
-// null while the name is still being typed and a string once a space follows
-// it. A second line ends it — a command is one line.
-function slashState(text) {
-  if (text.includes("\n")) return null;
-  const m = /^\/(\S*)(?:\s+(.*))?$/.exec(text);
-  if (!m) return null;
-  return { name: m[1], args: m[2] === undefined ? null : m[2] };
-}
-
-// Ranked: an exact name, then a name starting with the query, then one
-// containing it, then a description containing it; ties keep list order.
-function paletteMatches(items, query) {
-  const q = query.toLowerCase();
-  const rank = (it) => {
-    if (!q) return 0;
-    const n = it.name.toLowerCase();
-    if (n === q) return 0;
-    if (n.startsWith(q)) return 1;
-    if (n.includes(q)) return 2;
-    return (it.description || "").toLowerCase().includes(q) ? 3 : -1;
-  };
-  return items.map((it, i) => ({ it, r: rank(it), i }))
-    .filter((x) => x.r >= 0)
-    .sort((a, b) => a.r - b.r || a.i - b.i)
-    .map((x) => x.it);
-}
-
-// the models /model may be given: the CLI's aliases, then what this session
-// has already used, newest first
-function modelItems(cmds) {
-  const seen = [];
-  for (const ex of (LIVE ? LIVE.exchanges : []).slice().reverse())
-    for (const m of String(ex.model || "").split(", ")) if (m && !seen.includes(m)) seen.push(m);
-  return [
-    ...(cmds.models || []).map((m) => ({ name: m.name, description: m.description, kind: "alias" })),
-    ...seen.map((m) => ({ name: m, description: modelLabel(m), kind: "used here" })),
-  ];
-}
-
-let COMMANDS = null, COMMANDS_KEY = "", COMMANDS_AT = 0;
-const COMMANDS_TTL = 60000;  // a skill installed mid-session shows up within a minute
-const PALETTE = { mode: null, items: [], sel: 0, seq: 0 };
-
-async function loadCommands() {
-  const key = LIVE ? LIVE.key : "";
-  if (COMMANDS && COMMANDS_KEY === key && Date.now() - COMMANDS_AT < COMMANDS_TTL) return COMMANDS;
-  const q = new URLSearchParams();
-  if (LIVE_SID) q.set("sid", LIVE_SID);
-  COMMANDS = await api("/api/live/commands?" + q);
-  COMMANDS_KEY = key;
-  COMMANDS_AT = Date.now();
-  return COMMANDS;
-}
-
-function closePalette() {
-  $("palette").hidden = true;
-  PALETTE.mode = null;
-  PALETTE.items = [];
-}
-
-async function updatePalette() {
-  const st = slashState($("say").value);
-  if (!st || $("say").disabled) { closePalette(); return; }
-  const seq = ++PALETTE.seq;
-  let cmds;
-  try { cmds = await loadCommands(); } catch (e) { closePalette(); toast(e.message, "err"); return; }
-  if (seq !== PALETTE.seq) return;  // the box changed while the list was loading
-  if (st.args === null) {
-    PALETTE.mode = "commands";
-    PALETTE.items = paletteMatches(cmds.commands || [], st.name);
-  } else if (st.name === "model" && (cmds.commands || []).some((c) => c.name === "model")) {
-    PALETTE.mode = "models";
-    PALETTE.items = paletteMatches(modelItems(cmds), st.args);
-  } else {
-    closePalette();  // a finished name: the rest of the line is its arguments
-    return;
-  }
-  PALETTE.sel = 0;
-  drawPalette(cmds);
-}
-
-function drawPalette(cmds) {
-  const box = $("palette");
-  box.textContent = "";
-  box.hidden = false;
-  const models = PALETTE.mode === "models";
-  let head;
-  if (models) head = "/model — a name the CLI resolves, or a model this session has used";
-  else if (cmds.known) head = `skills and commands of ${cmds.agent} — ↑↓ choose · ⏎ or ⇥ inserts · esc closes`;
-  else head = `no command list for ${cmds.agent} — mh has not verified how it spells them; type it and it goes through all the same`;
-  box.appendChild(el("div", { class: "phead", text: head }));
-  if (!PALETTE.items.length && cmds.known)
-    box.appendChild(el("div", { class: "pempty", text: "nothing on the list matches — what you typed goes through all the same" }));
-  PALETTE.items.forEach((it, i) => {
-    const kind = it.kind === "builtin" ? "built-in"
-      : it.where && it.where !== it.kind && it.where !== cmds.agent ? `${it.kind} · ${it.where}` : it.kind;
-    const row = el("div", { class: "pitem" + (i === PALETTE.sel ? " sel" : ""),
-      // mousedown, not click: the box must keep the keyboard
-      onmousedown: (e) => { e.preventDefault(); pickPalette(i); } },
-      el("span", { class: "pname", text: (models ? "" : "/") + it.name }),
-      it.hint ? el("span", { class: "phint", text: it.hint }) : null,
-      el("span", { class: "pdesc", text: it.description || "" }),
-      el("span", { class: "pkind", text: kind }));
-    box.appendChild(row);
-  });
-}
-
-function movePalette(step) {
-  if (!PALETTE.items.length) return;
-  PALETTE.sel = (PALETTE.sel + step + PALETTE.items.length) % PALETTE.items.length;
-  const rows = $("palette").querySelectorAll(".pitem");
-  rows.forEach((r, i) => r.classList.toggle("sel", i === PALETTE.sel));
-  if (rows[PALETTE.sel]) rows[PALETTE.sel].scrollIntoView({ block: "nearest" });
-}
-
-function pickPalette(i) {
-  const it = PALETTE.items[i];
-  if (!it) return;
-  const ta = $("say");
-  if (PALETTE.mode === "models") {
-    ta.value = "/model " + it.name;
-    closePalette();
-  } else {
-    ta.value = "/" + it.name + " ";
-    updatePalette();  // /model goes on to its models; anything else is done
-  }
-  ta.focus();
-  ta.setSelectionRange(ta.value.length, ta.value.length);
-}
-
-function wirePalette() {
-  const ta = $("say");
-  ta.addEventListener("input", updatePalette);
-  ta.addEventListener("focus", updatePalette);
-  ta.addEventListener("blur", closePalette);
-  ta.addEventListener("keydown", (e) => {
-    if ($("palette").hidden) return;
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); movePalette(e.key === "ArrowDown" ? 1 : -1); }
-    else if ((e.key === "Enter" || e.key === "Tab") && !e.ctrlKey && !e.metaKey && PALETTE.items.length) { e.preventDefault(); pickPalette(PALETTE.sel); }
-    else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
-  });
-  $("say-slash").onclick = () => {
-    if (!ta.value.startsWith("/")) ta.value = "/" + ta.value;
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-    updatePalette();
-  };
+// What the reader asked to see of the stream: thinking and tool calls can
+// each be left out; the dialog always stays. Display only — a save never
+// stores either.
+const streamWanted = () => $("livethink").checked || $("livetools").checked;
+function visibleParts(ex) {
+  if (!ex.parts || !ex.parts.length) return ex;
+  const think = $("livethink").checked, tools = $("livetools").checked;
+  const parts = ex.parts.filter((p) => (p.kind === "thinking" ? think : p.kind === "tool" ? tools : true));
+  if (parts.length) return { ...ex, parts };
+  const hidden = [!think && "thinking", !tools && "tool calls"].filter(Boolean).join(" and ");
+  return { ...ex, parts, note: ex.agent ? null : `(only ${hidden} here — hidden)` };
 }
 
 function liveCard(ex) {
@@ -1663,7 +1743,7 @@ function liveCard(ex) {
     agent.appendChild(md(ex.agent));
   } else {
     agent.appendChild(el("p", { class: "empty",
-      text: ex.pending ? "(still answering…)" : "(no textual reply captured)" }));
+      text: ex.pending ? "(still answering…)" : ex.note || "(no textual reply captured)" }));
   }
   card.appendChild(agent);
   return card;
@@ -1745,30 +1825,101 @@ function liveEditCard(card, ex) {
   card.appendChild(wrap);
 }
 
-function wireLive() {
-  // the shortcut is what the keyboard in front of the page actually has
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-  $("say-send").textContent = mac ? "send ⌘⏎" : "send Ctrl+⏎";
-  $("golive").onclick = () => {
-    $("livesec").scrollIntoView({ behavior: "smooth", block: "start" });
-    if (!$("say").disabled) $("say").focus({ preventScroll: true });
-  };
-  $("livewatch").onchange = () => {
-    $("livedot").className = "livedot" + ($("livewatch").checked ? "" : " off");
-    if ($("livewatch").checked) runLive(); else clearTimeout(LIVE_TIMER);
-  };
-  $("livefull").onchange = () => { LIVE = null; runLive(); };
-  $("say-send").onclick = say;
-  $("say").addEventListener("keydown", (e) => {
-    // ⌘/ctrl+enter sends; plain enter stays a newline, so a paragraph is one message
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); say(); }
+// Two ways to store the session: the purified dialog, or a summary written by
+// the CLI that runs the session — claude -p or pi -p, started fresh in a scratch
+// directory with that tool's own /compact prompt. Nothing is sent to the
+// running session; the cost is one model call on the user's account.
+// --- the save box ----------------------------------------------------------
+// How this session is stored, and where: two ways with a word on each, the
+// target checkpoint in the open (another one moves the session there), the
+// summary's focus inline, one button that says what it will do.
+let SAVE_KIND = null;  // "dialog" | "summary" — the reader's pick, kept across polls
+let SAVE_TO = null;    // a target picked by hand; cleared once a save lands
+
+function drawSaveBox(d) {
+  $("savebox").hidden = RO;
+  if (RO) return;
+  const c = d.compactor || {}, n = d.would_store;
+  if (SAVE_KIND === null) SAVE_KIND = d.saved && d.saved.compacted && c.available ? "summary" : "dialog";
+  if (SAVE_KIND === "summary" && !c.available) SAVE_KIND = "dialog";
+  $("savedialoghint").textContent = `${n} exchange${n === 1 ? "" : "s"}, purified — stored as they are`;
+  $("savesummaryhint").textContent = c.available
+    ? `${c.agent} writes it — one model call; the running session is not touched`
+    : `not available: ${c.reason || "no CLI for this session"}`;
+  const summary = document.querySelector("input[name=savekind][value=summary]");
+  summary.disabled = !c.available;
+  summary.closest("label").classList.toggle("off", !c.available);
+  document.querySelector(`input[name=savekind][value=${SAVE_KIND}]`).checked = true;
+  $("savefocusrow").hidden = SAVE_KIND !== "summary";
+  // the target: where the session lives, else the current checkpoint; any other can be picked
+  const sel = $("saveto"), want = SAVE_TO || saveTarget(d);
+  const slugs = DATA ? DATA.checkpoints.map((x) => x.slug) : [];
+  sel.textContent = "";
+  [...new Set([...slugs, want])].forEach((slug) => sel.appendChild(el("option", { value: slug, text: slug })));
+  sel.value = want;
+  updateSaveButton(d);
+}
+
+function updateSaveButton(d) {
+  const to = $("saveto").value;
+  $("savego").textContent = (SAVE_KIND === "summary" ? "Write summary to " : "Save dialog to ") + to;
+  $("savenote").textContent = d.saved && d.saved.checkpoint !== to
+    ? `moves the session out of ${d.saved.checkpoint}`
+    : d.saved && d.saved.compacted && SAVE_KIND === "dialog"
+      ? "replaces the compacted summary with the dialog"
+      : "";
+}
+
+function wireSaveBox() {
+  document.querySelectorAll("input[name=savekind]").forEach((r) => {
+    r.onchange = () => {
+      SAVE_KIND = r.value;
+      $("savefocusrow").hidden = SAVE_KIND !== "summary";
+      if (SAVE_KIND === "summary") $("savefocus").focus();
+      if (LIVE) updateSaveButton(LIVE);
+    };
   });
-  $("live-save").onclick = () =>
-    liveAct("/api/live/save", {}, (r) => `saved ${r.file} -> ${r.checkpoint}`);
-  $("live-discard").onclick = () => {
-    if (!confirm("Discard every live edit for this session?\n\nThe dialog goes back to what the transcript says.")) return;
-    liveAct("/api/live/discard", {}, "live edits discarded");
+  $("saveto").onchange = () => { SAVE_TO = $("saveto").value; if (LIVE) updateSaveButton(LIVE); };
+  $("savefocus").addEventListener("keydown", (e) => { if (e.key === "Enter") $("savego").click(); });
+  $("savego").onclick = () => {
+    if (!LIVE) return;
+    const to = $("saveto").value;
+    SAVE_TO = null;  // after a save the box follows the session again
+    if (SAVE_KIND === "summary") compactLive(LIVE.compactor.agent, $("savefocus").value.trim(), to);
+    else liveAct("/api/live/save", { to }, (r) => `saved ${r.file} -> ${r.checkpoint}`);
   };
+}
+
+async function compactLive(agent, focus, to) {
+  const btn = $("savego");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = `writing the summary with ${agent}…`;
+  toast(`asking ${agent} for the summary — this can take a minute`, "ok");
+  try {
+    const r = await post("/api/live/compact", { sid: LIVE_SID, focus: focus || "", to: to || "" });
+    toast(`compacted ${r.exchanges} exchange${r.exchanges === 1 ? "" : "s"} with ${r.agent} → ${r.file} -> ${r.checkpoint}`, "ok");
+    LIVE = null;
+    await pollLive();
+    await refresh();
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+function wireLive() {
+  $("golive").onclick = () => {
+    setLiveShown(!LIVE_SHOWN);
+    if (LIVE_SHOWN) $("livesec").scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  $("livethink").onchange = $("livetools").onchange = () => { LIVE = null; runLive(); };
+  wireSaveBox();
+  $("live-discard").onclick = (e) => confirmMenu(e.currentTarget,
+    "Discard every live edit for this session? The dialog goes back to what the transcript says.",
+    "discard edits", () => liveAct("/api/live/discard", {}, "live edits discarded"));
   $("live-follow").onclick = () => {
     if (!LIVE) return;
     const label = (s) => `${s.key} · ${s.agent} · ${s.file}`;
@@ -1784,7 +1935,7 @@ function wireLive() {
   $("live-newest").onclick = () => followNewest();
   // A background tab should not poll every 2.5s; coming back should not wait.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && $("livewatch").checked) runLive(); else scheduleLive();
+    if (!document.hidden) runLive(); else scheduleLive();
   });
 }
 
@@ -1792,37 +1943,10 @@ function wireLive() {
 
 const otherCheckpoints = () => DATA.checkpoints.map((c) => c.slug).filter((x) => x !== SEL_CK);
 
-function createCheckpoint(name, at) {
-  act("/api/checkpoint/create", { name, at }, (r) => `checkpoint ${r.slug} created`);
-}
-
-// Everything the CLI can do to a checkpoint, from its node: open the panel,
-// point `current` at it, rename, another take at its stage, link, delete —
-// and, when it stands for a template stage, insert stages around it.
-function nodeMenu(anchor, c, col) {
-  const isCurrent = c.slug === DATA.current;
-  const stageOf = DATA.template ? DATA.template.stages.find((st) => st.slug === col.stage) : null;
-  const items = [
-    [`open ${c.slug}`, () => selectCheckpoint(c.slug)],
-    [isCurrent ? "✓ current" : "make current", isCurrent ? null : () => makeCurrent(c.slug)],
-    ["rename…", () => ask(anchor, `rename ${c.slug} to…`, c.slug, (name) =>
-      act("/api/checkpoint/rename", { slug: c.slug, name }, (r) => `renamed to ${r.slug}`,
-        (r) => { if (SEL_CK === c.slug) { SEL_CK = r.slug; selectCheckpoint(r.slug); } }))],
-    [`+ another at ${col.stage}`, () => createCheckpoint(null, col.stage)],
-    ["link to…", () => menu(anchor, `link ${c.slug} with…`,
-      DATA.checkpoints.map((x) => x.slug).filter((x) => x !== c.slug), "nothing to link to",
-      (b) => act("/api/link", { a: c.slug, b }, "linked"))],
-  ];
-  if (stageOf) {
-    items.push(["insert a stage before…", () => insertStage(anchor, stageOf.name, 0)]);
-    items.push(["insert a stage after…", () => insertStage(anchor, stageOf.name, 1)]);
-  }
-  items.push(["delete…", () => {
-    if (!confirm(`Delete checkpoint ${c.slug} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
-    if (SEL_CK === c.slug) { SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true; }
-    act("/api/checkpoint/delete", { slug: c.slug }, "checkpoint deleted");
-  }]);
-  actionMenu(anchor, c.slug + (col.stage !== c.slug ? ` · at ${col.stage}` : ""), items);
+function createCheckpoint(name, at, under) {
+  act("/api/checkpoint/create", { name, at, under },
+    (r) => `${r.parent ? "sub-checkpoint" : "checkpoint"} ${r.slug} created`,
+    (r) => selectCheckpoint(r.slug, true));  // open what was just made
 }
 
 // A stage still ahead: create it, or edit the template's list around it.
@@ -1837,10 +1961,10 @@ function stageMenu(anchor, name, isNext) {
   ];
   if (i > 0) items.push(["move earlier", () => setStages(swapped(t.stages.map((st) => st.name), i, i - 1), `${name} moved earlier`)]);
   if (i < t.stages.length - 1) items.push(["move later", () => setStages(swapped(t.stages.map((st) => st.name), i, i + 1), `${name} moved later`)]);
-  items.push(["remove stage", () => {
-    if (!confirm(`Remove the stage "${name}" from the ${t.name} template?\n\nNo checkpoint is touched; the template just stops expecting it.`)) return;
-    setStages(t.stages.map((st) => st.name).filter((_, k) => k !== i), `stage ${name} removed`);
-  }]);
+  items.push(["remove stage…", () => confirmMenu(anchor,
+    `Remove the stage "${name}" from the ${t.name} template? No checkpoint is touched; the template just stops expecting it.`,
+    "remove stage",
+    () => setStages(t.stages.map((st) => st.name).filter((_, k) => k !== i), `stage ${name} removed`))]);
   actionMenu(anchor, `${name} — stage ${i + 1} of ${t.total}, not created yet`, items);
 }
 
@@ -1858,6 +1982,78 @@ const swapped = (arr, i, j) => { const out = arr.slice(); [out[i], out[j]] = [ou
 const setStages = (stages, msg) => act("/api/template/stages", { stages }, msg);
 const makeCurrent = (slug) => act("/api/goto", { slug }, (r) => `current is now ${r.current}`);
 
+// --- checkpoint actions ------------------------------------------------------
+// Everything that can be done to a checkpoint, defined once. The node's menu
+// and the panel's toolbar both draw from this list, so the two cannot drift
+// apart. Each action takes the element it was asked from, to anchor what it
+// opens next (a name field, a picker, a confirmation).
+const ckBy = (slug) => DATA.checkpoints.find((x) => x.slug === slug);
+
+function checkpointActions(c) {
+  const isCurrent = c.slug === DATA.current, stage = c.stage || c.slug;
+  const others = DATA.checkpoints.map((x) => x.slug).filter((x) => x !== c.slug);
+  const partners = DATA.links.filter((e) => e.includes(c.slug)).map((e) => (e[0] === c.slug ? e[1] : e[0]));
+  const st = !c.parent && DATA.template ? DATA.template.stages.find((x) => x.slug === stage) : null;
+  const subtree = DATA.checkpoints.filter((x) => x.slug === c.slug || x.slug.startsWith(c.slug + "."));
+  const n = subtree.reduce((s, x) => s + x.sessions.length, 0), subs = subtree.length - 1;
+  const held = [subs ? `its ${subs} sub-checkpoint${subs === 1 ? "" : "s"}` : null,
+                n ? `${n} session${n === 1 ? "" : "s"}` : null].filter(Boolean).join(" and ");
+  const A = {
+    current: { label: isCurrent ? "Current" : "Make current", disabled: isCurrent,
+      hint: "the next mh save and mh load start here",
+      pick: () => makeCurrent(c.slug) },
+    sub: { label: "Sub-checkpoint…", hint: "a smaller scope inside it — loads together with it",
+      pick: (anchor) => ask(anchor, `Sub-checkpoint under ${c.slug}`, "",
+        (name) => createCheckpoint(name, null, c.slug), { placeholder: "its name" }) },
+    take: { label: `Another take at ${stage}`, disabled: !!c.parent,
+      hint: c.parent ? "a sub-checkpoint has no takes — add one to its parent instead"
+                     : `a parallel path through the stage — named ${stage}-2, ${stage}-3, …`,
+      pick: () => createCheckpoint(null, stage) },
+    link: { label: "Link to…", disabled: !others.length,
+      hint: others.length ? "linked checkpoints load together" : "no other checkpoint to link",
+      pick: (anchor) => menu(anchor, `link ${c.slug} with…`, others, "nothing to link to",
+        (b) => act("/api/link", { a: c.slug, b }, "linked")) },
+    unlink: { label: "Unlink…", disabled: !partners.length,
+      hint: partners.length ? `linked with ${partners.join(", ")}` : "no links on this checkpoint",
+      pick: (anchor) => menu(anchor, `unlink ${c.slug} from…`, partners, "no links on this checkpoint",
+        (b) => act("/api/unlink", { a: c.slug, b }, "unlinked")) },
+    rename: { label: "Rename…",
+      hint: c.parent ? `its own name — it stays under ${c.parent}` : "a template stage is renamed with it",
+      pick: (anchor) => ask(anchor, `Rename ${c.slug}`, c.name, (name) => {
+        const open = SEL_CK === c.slug, file = open ? SEL_SES : null;  // the open session follows
+        act("/api/checkpoint/rename", { slug: c.slug, name }, (r) => `renamed to ${r.slug}`,
+          (r) => { if (open) { selectCheckpoint(r.slug); if (file) openSession(r.slug, file); } });
+      }) },
+    delete: { label: "Delete…", danger: true,
+      hint: (held ? `with ${held} — ` : "") + "git history keeps everything",
+      pick: (anchor) => confirmMenu(anchor,
+        `Delete checkpoint ${c.slug}${held ? ` with ${held}` : ""}? The hub keeps everything in git history.`,
+        "delete checkpoint", () => {
+          if (SEL_CK && (SEL_CK === c.slug || SEL_CK.startsWith(c.slug + "."))) closeCheckpoint();
+          act("/api/checkpoint/delete", { slug: c.slug }, "checkpoint deleted");
+        }) },
+  };
+  if (st) {  // stages can be inserted around a checkpoint that stands for one
+    A.before = { label: "Insert a stage before…", hint: `before ${st.name} in the ${DATA.template.name} template`,
+      pick: (anchor) => insertStage(anchor, st.name, 0) };
+    A.after = { label: "Insert a stage after…", hint: `after ${st.name} in the ${DATA.template.name} template`,
+      pick: (anchor) => insertStage(anchor, st.name, 1) };
+  }
+  return A;
+}
+
+// A node's menu: open it, then everything above, anchored at the node
+function nodeMenu(anchor, c) {
+  const A = checkpointActions(c), n = c.sessions.length;
+  const items = [
+    { label: "Open", hint: "its sessions, links and details in the panel below",
+      pick: () => selectCheckpoint(c.slug, true) },
+    A.current, A.sub, A.take, A.link, A.unlink, A.rename, ...(A.before ? [A.before, A.after] : []), A.delete,
+  ].map((o) => ({ ...o, pick: () => o.pick(anchor) }));
+  optionMenu(anchor, `${c.slug} · ${n} session${n === 1 ? "" : "s"}` +
+    (c.parent ? ` · under ${c.parent}` : c.stage && c.stage !== c.slug ? ` · at ${c.stage}` : ""), items);
+}
+
 // a menu of labelled actions (menu() takes bare strings, which is right for
 // picking a name and wrong for a verb list)
 function actionMenu(anchor, label, items) {
@@ -1869,22 +2065,23 @@ function actionMenu(anchor, label, items) {
   openMenu(m, anchor);
 }
 
-function deleteSession(s) {
-  if (!confirm(`Delete session ${s.file}? The hub keeps it in git history.`)) return;
-  $("sessec").hidden = true;
-  act("/api/session/delete", { ckpt: SEL_CK, file: s.file }, "session deleted");
+function deleteSession(s, anchor) {
+  confirmMenu(anchor, `Delete session ${s.file}? The hub keeps it in git history.`, "delete session", () => {
+    if (SEL_SES === s.file) closeSession();
+    act("/api/session/delete", { ckpt: SEL_CK, file: s.file }, "session deleted");
+  });
 }
 
 function moveSession(s, anchor) {
   menu(anchor, `move ${s.file} to…`, otherCheckpoints(),
     "no other checkpoint to move into", (to) => {
-      $("sessec").hidden = true;
+      if (SEL_SES === s.file) closeSession();
       act("/api/session/move", { ckpt: SEL_CK, file: s.file, to }, `moved to ${to}`);
     });
 }
 
 function wire() {
-  $("reload").onclick = $("budget").onchange = () => refresh();
+  $("reload").onclick = $("budget").onchange = $("tree").onchange = () => refresh();
   $("memtoggle").onclick = () => {
     MEM_OPEN = !MEM_OPEN;
     localStorage.setItem(MEM_KEY, MEM_OPEN ? "1" : "0");
@@ -1894,91 +2091,84 @@ function wire() {
     const t = DATA.template, ahead = t ? t.stages.filter((st) => !st.exists) : [];
     const cur = DATA.checkpoints.find((c) => c.slug === DATA.current);
     const here = cur ? (cur.stage || cur.slug) : null;
-    if (!ahead.length && !here) {
-      ask($("newckpt"), "new checkpoint — it becomes current", "", createCheckpoint);
-      return;
-    }
-    // the template's next stage, one more take at the current stage, the rest
-    // of the stages, or any name
-    const other = "another name…", again = here ? `another at ${here} (${here}-N)` : null;
-    const label = (st, k) => (k === 0 ? "▶ " : "") + st.name +
-      (k === 0 ? ` — next (stage ${t.stages.indexOf(st) + 1} of ${t.total})` : "");
-    const byLabel = new Map(ahead.map((st, k) => [label(st, k), st.name]));
-    const items = [...byLabel.keys()];
-    if (again) items.splice(Math.min(1, items.length), 0, again);
-    menu($("newckpt"), t ? `new checkpoint — ${t.name} template` : "new checkpoint", [...items, other], "",
-      (pick) => {
-        if (pick === other) ask($("newckpt"), "new checkpoint — it becomes current", "", createCheckpoint);
-        else if (pick === again) createCheckpoint(null, here);
-        else createCheckpoint(byLabel.get(pick));
-      });
+    const byName = () => ask($("newckpt"), "New checkpoint", "", createCheckpoint,
+      { placeholder: "a name — it becomes current" });
+    if (!ahead.length && !here) { byName(); return; }
+    // the template's next stage first; then one more take at the current
+    // stage, a scope under the current checkpoint, the stages after, any name
+    const opts = ahead.map((st, k) => ({ label: st.name,
+      hint: k === 0 ? `next stage — ${t.stages.indexOf(st) + 1} of ${t.total} in ${t.name}`
+                    : `stage ${t.stages.indexOf(st) + 1} of ${t.total}, out of turn`,
+      pick: () => createCheckpoint(st.name) }));
+    const extra = [];
+    if (here) extra.push({ label: `Another take at ${here}`,
+      hint: `a parallel path through the stage — named ${here}-2, ${here}-3, …`,
+      pick: () => createCheckpoint(null, here) });
+    if (cur) extra.push({ label: `Sub-checkpoint under ${cur.slug}`,
+      hint: "a smaller scope inside it — loads together with it",
+      pick: () => ask($("newckpt"), `Sub-checkpoint under ${cur.slug}`, "",
+        (name) => createCheckpoint(name, null, cur.slug), { placeholder: "its name" }) });
+    opts.splice(Math.min(1, opts.length), 0, ...extra);
+    opts.push({ label: "Another name", hint: "a checkpoint outside the template", pick: byName });
+    optionMenu($("newckpt"), t ? `New checkpoint — ${t.name} template` : "New checkpoint", opts);
   };
-  $("tmpl").onclick = () => {
-    const cur = DATA.template ? DATA.template.name : null;
-    const none = "none — name every checkpoint yourself";
-    const label = (t) => `${t.name === cur ? "✓ " : ""}${t.name} — ${t.stages.length} stages: ` +
-      t.stages.map((st) => st.name).join(" → ");
-    const byLabel = new Map(DATA.templates.map((t) => [label(t), t.name]));
-    menu($("tmpl"), "stage template — default names for the checkpoints ahead",
-      [...byLabel.keys(), ...(cur ? [none] : [])], "", (pick) => {
-        const name = pick === none ? null : byLabel.get(pick);
-        if (name === cur) return;
-        act("/api/template", { name },
-          name ? `template ${name} — mh names the stages from here` : "template cleared");
-      });
+  $("ck-close").onclick = closeCheckpoint;
+  $("ses-close").onclick = closeSession;
+  // each toolbar button is one action of the list, anchored at the button
+  const panelAct = (key) => (e) => {
+    const c = ckBy(SEL_CK);
+    if (c) checkpointActions(c)[key].pick(e.currentTarget);
   };
-  $("ck-current").onclick = () => { if (SEL_CK) makeCurrent(SEL_CK); };
-  $("ck-another").onclick = () => {
-    const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
-    if (c) createCheckpoint(null, c.stage || c.slug);
-  };
-  $("ck-rename").onclick = () =>
-    ask($("ck-rename"), `rename ${SEL_CK} to…`, SEL_CK, (name) => {
-      $("sessec").hidden = true;
-      act("/api/checkpoint/rename", { slug: SEL_CK, name },
-        (r) => `renamed to ${r.slug}`, (r) => { SEL_CK = r.slug; selectCheckpoint(SEL_CK); });
-    });
-  $("ck-delete").onclick = () => {
-    const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
-    if (!confirm(`Delete checkpoint ${SEL_CK} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
-    SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
-    act("/api/checkpoint/delete", { slug: c.slug }, "checkpoint deleted");
-  };
-  $("ck-link").onclick = () =>
-    menu($("ck-link"), `link ${SEL_CK} with…`, otherCheckpoints(),
-      "nothing to link to", (b) => act("/api/link", { a: SEL_CK, b }, "linked"));
-  $("ck-unlink").onclick = () => {
-    const partners = DATA.links.filter((e) => e.includes(SEL_CK)).map((e) => (e[0] === SEL_CK ? e[1] : e[0]));
-    menu($("ck-unlink"), `unlink ${SEL_CK} from…`, partners,
-      "no links on this checkpoint", (b) => act("/api/unlink", { a: SEL_CK, b }, "unlinked"));
+  $("ck-current").onclick = panelAct("current");
+  $("ck-another").onclick = panelAct("take");
+  $("ck-sub").onclick = panelAct("sub");
+  $("ck-rename").onclick = panelAct("rename");
+  $("ck-delete").onclick = panelAct("delete");
+  $("ck-link").onclick = panelAct("link");
+  $("ck-unlink").onclick = panelAct("unlink");
+  $("ck-stage").onclick = (e) => {
+    const c = ckBy(SEL_CK), A = c && checkpointActions(c);
+    if (!A || !A.before) return;
+    optionMenu(e.currentTarget, `Stages around ${c.slug}`, [A.before, A.after]
+      .map((o) => ({ ...o, pick: () => o.pick(e.currentTarget) })));
   };
 }
 
 async function refresh() {
   const budget = $("budget").value;
-  DATA = await api("/api/map?budget=" + encodeURIComponent(budget === "" ? "none" : budget));
-  $("current").textContent = DATA.current ? "current: " + DATA.current : "no current checkpoint";
+  DATA = await api("/api/map?budget=" + encodeURIComponent(budget === "" ? "none" : budget) +
+                   ($("tree").checked ? "&tree=1" : ""));
   const t = DATA.template;
-  $("tmpl").textContent = t ? `template: ${t.name} ▾` : "template ▾";
-  $("tmpl").title = t
-    ? `${t.done} of ${t.total} stages created` + (t.next ? ` · next: ${t.next}` : "")
-    : "Stage template: default names for the checkpoints ahead";
+  // the timeline's status line: where the project stands, as `mh status` puts it
+  const packs = DATA.load.loaded;
+  const named = packs.slice(0, 4).join(" + ") + (packs.length > 4 ? ` (+${packs.length - 4} more)` : "");
+  $("current").textContent = [
+    DATA.current ? `current: ${DATA.current}` : "no current checkpoint",
+    packs.length ? `next load${$("tree").checked ? ", whole nodes" : ""}: ${named}` : null,
+    t ? `template ${t.name}: ${t.done} of ${t.total} stages` + (t.next ? ` · next: ${t.next}` : "") : null,
+  ].filter(Boolean).join(" · ");
   $("legend-ahead").hidden = !(t && t.done < t.total);
-  if (DATA.load.error) toast(DATA.load.error, "err");
+  // nothing to load is the normal state of a new hub, not an error to shout
+  if (DATA.load.error && DATA.checkpoints.length) toast(DATA.load.error, "err");
   drawMap();
   loadMemory();
-  if (SEL_CK && !DATA.checkpoints.some((c) => c.slug === SEL_CK)) {
-    SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true;
-  }
+  if (SEL_CK && !DATA.checkpoints.some((c) => c.slug === SEL_CK)) closeCheckpoint();
   // an invariant of refreshing, not something each call site must remember
   if (SEL_CK) selectCheckpoint(SEL_CK);
+  if (LIVE && !RO) drawSaveBox(LIVE);  // its list of checkpoints comes from the map
 }
 
 wire();
 wireLive();
-wirePalette();
 $("budget").value = CFG.budget ?? "";
-$("hubpath").textContent = CFG.hub;
+// the project's name, not forty characters of path — the full path is a hover away
+const hubLabel = (p) => {
+  const parts = String(p).replace(/\/+$/, "").split("/");
+  const last = parts.pop() || "";
+  return last === ".memoryhub" && parts.length ? `${parts.pop()}/.memoryhub` : last;
+};
+$("hubpath").textContent = hubLabel(CFG.hub);
+$("hubpath").title = CFG.hub;
 if (CFG.version) document.title += " · v" + CFG.version;
 if (VIEW) {
   document.body.classList.add("viewonly");
@@ -1989,7 +2179,6 @@ if (VIEW) {
 if (RO) {
   $("robadge").hidden = false;
   $("newckpt").hidden = true;
-  $("tmpl").hidden = true;
   $("ckactions").hidden = true;
 }
 refresh().catch((e) => toast(e.message, "err"));

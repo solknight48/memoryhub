@@ -236,3 +236,11 @@ def test_a_picture_the_agent_read_is_shown_not_just_named():
         ]
     )
     assert "<img" not in html
+
+
+def test_a_reply_whose_only_parts_are_hidden_says_so():
+    """With tool calls (or thinking) unticked, an exchange that had nothing else
+    shows the note the page attaches — not "no textual reply captured"."""
+    html = card(parts=[], agent="", note="(only tool calls here — hidden)")
+    assert "(only tool calls here — hidden)" in html
+    assert "no textual reply" not in html

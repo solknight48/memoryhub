@@ -6,8 +6,8 @@
 #   scripts/test-remote.sh [ssh-host] [pytest args...]
 #
 # Needs `uv` on the remote (curl -LsSf https://astral.sh/uv/install.sh | sh).
-# Without node/tmux there, the UI-javascript and relay tests skip — the same
-# ones the macOS CI runners skip.
+# Without node there, the UI-javascript tests skip — the same ones the macOS
+# CI runners skip.
 set -euo pipefail
 host="${1:-mac}"
 shift || true

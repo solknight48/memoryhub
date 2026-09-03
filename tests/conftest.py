@@ -70,12 +70,6 @@ def ws(tmp_path, monkeypatch):
         "GIT_TERMINAL_PROMPT",
     ):
         monkeypatch.setenv(var, env[var])
-    # A developer running the suite inside tmux: `TMUX` names their server's
-    # socket and wins over TMUX_TMPDIR, so the relay tests' private server —
-    # and their `tmux kill-server` — would land on the real one, killing the
-    # very terminal the suite runs in. The tests must not see a tmux at all.
-    monkeypatch.delenv("TMUX", raising=False)
-    monkeypatch.delenv("TMUX_PANE", raising=False)
     return {"root": tmp_path, "home": home, "env": env}
 
 

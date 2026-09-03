@@ -348,8 +348,50 @@ def delete_session(hub: Path, ckpt_ref: str, file_ref: str) -> dict:
     c, path = resolve_session(hub, ckpt_ref, file_ref)
     name = path.name
     path.unlink()
+    _reskip(hub, drop=f"{c.slug}/{name}")
     git.auto_commit(hub, f"curate: delete session {name} ({c.slug})")
     return {"checkpoint": c.slug, "file": name}
+
+
+def skip_session(hub: Path, ckpt_ref: str, file_ref: str, skipped: bool) -> dict:
+    """Leave a session out of `mh load`, or load it again. The file stays where
+    it is; only the hub's skip list changes — and that is a commit like any
+    other, so it is undone like any other."""
+    ensure_committable(hub)
+    c, path = resolve_session(hub, ckpt_ref, file_ref)
+    sid = f"{c.slug}/{path.name}"
+    skips = ck.read_skips(hub)
+    if skipped == (sid in skips):
+        return {"checkpoint": c.slug, "file": path.name, "skipped": skipped, "unchanged": True}
+    (skips.add if skipped else skips.discard)(sid)
+    ck.write_skips(hub, skips)
+    git.auto_commit(hub, f"curate: {'skip' if skipped else 'unskip'} {sid}")
+    return {"checkpoint": c.slug, "file": path.name, "skipped": skipped}
+
+
+def _names(s: str, old: str) -> bool:
+    """`s` is `old` itself, a sub-checkpoint under it (`old.x`) or a session
+    of either (`old/file`, `old.x/file`) — everything a rename or delete of
+    `old` carries with it."""
+    return s == old or (s.startswith(old) and len(s) > len(old) and s[len(old)] in "./")
+
+
+def _follow(s: str, old: str, new: str) -> str:
+    return new + s[len(old) :] if _names(s, old) else s
+
+
+def _reskip(hub: Path, drop: str | None = None, rename: tuple[str, str] | None = None) -> None:
+    """Keep the skip list pointing at sessions that exist: an id leaves with
+    the session, checkpoint or subtree that named it; a renamed one is
+    followed."""
+    skips = ck.read_skips(hub)
+    if not skips:
+        return
+    if drop:
+        skips = {s for s in skips if not _names(s, drop)}
+    if rename:
+        skips = {_follow(s, *rename) for s in skips}
+    ck.write_skips(hub, skips)
 
 
 def move_session(hub: Path, ckpt_ref: str, file_ref: str, to_ref: str) -> dict:
@@ -368,6 +410,7 @@ def move_session(hub: Path, ckpt_ref: str, file_ref: str, to_ref: str) -> dict:
     if clash:
         raise MhError(f"'{target.slug}' already holds this session as {clash[0].name}")
     shutil.move(str(path), str(dest))
+    _reskip(hub, rename=(f"{c.slug}/{path.name}", f"{target.slug}/{path.name}"))
     git.auto_commit(hub, f"curate: move {path.name} {c.slug} -> {target.slug}")
     return {"from": c.slug, "to": target.slug, "file": path.name}
 
@@ -376,50 +419,56 @@ def move_session(hub: Path, ckpt_ref: str, file_ref: str, to_ref: str) -> dict:
 
 
 def _relink(hub: Path, rename: tuple[str, str] | None = None, drop: str | None = None):
+    """A checkpoint renamed or deleted: its links, stage placement and skipped
+    sessions follow or leave — and so do those of every sub-checkpoint under
+    it, which are named through it."""
     links = ck.read_links(hub)
     if drop:
-        links = [(a, b) for a, b in links if drop not in (a, b)]
+        links = [(a, b) for a, b in links if not _names(a, drop) and not _names(b, drop)]
     if rename:
-        old, new = rename
-        links = [(new if a == old else a, new if b == old else b) for a, b in links]
+        links = [(_follow(a, *rename), _follow(b, *rename)) for a, b in links]
     ck.write_links(hub, links)
     # an explicit stage placement follows its checkpoint, and leaves with it;
     # a renamed checkpoint keeps its column, since the new name may say otherwise
     stages = ck.read_stages(hub)
     if drop:
-        stages.pop(drop, None)
+        stages = {k: v for k, v in stages.items() if not _names(k, drop)}
     if rename and rename[0] in stages:
         stages[rename[1]] = stages.pop(rename[0])
-    elif rename:
+    elif rename and "." not in rename[0]:
         old, new = rename
         column = ck.stage_of(hub, old, stages)
         if ck.stage_of(hub, new, stages) != column:
             stages[new] = column
     if stages or ck.stages_path(hub).exists():
         ck.write_stages(hub, stages)
+    _reskip(hub, drop=drop, rename=rename)
 
 
 def rename_checkpoint(hub: Path, ref: str, name: str) -> dict:
     ensure_committable(hub)
     c = ck.resolve(hub, ref)
-    new_slug = ck.slugify(name)
+    leaf = ck.slugify(name)
+    new_slug = f"{c.parent}.{leaf}" if c.parent else leaf
     if new_slug == c.slug:
         return {"slug": c.slug, "unchanged": True}
     if any(x.slug == new_slug for x in ck.list_checkpoints(hub)):
         raise MhError(f"checkpoint '{new_slug}' already exists")
-    # The created stamp is preserved: it defines walk order.
-    c.path.rename(c.path.with_name(f"{c.created}_{new_slug}"))
+    # The created stamp is preserved: it defines walk order. Sub-checkpoints
+    # live inside the directory, so they are renamed with it.
+    c.path.rename(c.path.with_name(f"{c.created}_{leaf}"))
     _relink(hub, rename=(c.slug, new_slug))
     from . import templates  # a stage of the template is renamed with it
 
-    if templates.rename_stage(hub, c.slug, name):
+    if not c.parent and templates.rename_stage(hub, c.slug, name):
         # the stage moved with the checkpoint, so its new name is its column —
         # not the old one _relink pinned it to
         placed = ck.read_stages(hub)
         if placed.pop(new_slug, None) is not None:
             ck.write_stages(hub, placed)
-    if read_current(hub) == c.slug:
-        write_current(hub, new_slug)
+    current = read_current(hub)
+    if current and _names(current, c.slug):
+        write_current(hub, _follow(current, c.slug, new_slug))
     git.auto_commit(hub, f"curate: rename checkpoint {c.slug} -> {new_slug}")
     return {"slug": new_slug, "was": c.slug}
 
@@ -427,11 +476,14 @@ def rename_checkpoint(hub: Path, ref: str, name: str) -> dict:
 def delete_checkpoint(hub: Path, ref: str) -> dict:
     ensure_committable(hub)
     c = ck.resolve(hub, ref)
-    remaining = [x for x in ck.list_checkpoints(hub) if x.slug != c.slug]
-    sessions = len(c.sessions)
-    shutil.rmtree(c.path)
+    everything = ck.list_checkpoints(hub)
+    subtree = [x for x in everything if ck.is_within(x.slug, c.slug)]
+    remaining = [x for x in everything if not ck.is_within(x.slug, c.slug)]
+    sessions = sum(len(x.sessions) for x in subtree)
+    shutil.rmtree(c.path)  # sub-checkpoints go with the directory they live in
     _relink(hub, drop=c.slug)
-    if read_current(hub) == c.slug:
+    current = read_current(hub)
+    if current and _names(current, c.slug):
         if remaining:
             write_current(hub, remaining[-1].slug)
         else:
@@ -440,5 +492,6 @@ def delete_checkpoint(hub: Path, ref: str) -> dict:
     return {
         "slug": c.slug,
         "sessions": sessions,
+        "sub_checkpoints": len(subtree) - 1,
         "current": read_current(hub),
     }

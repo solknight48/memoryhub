@@ -83,10 +83,11 @@ def _has_mh_hook(entries: list) -> bool:
     )
 
 
-def install(path: Path, budget: int | None = None) -> list[str]:
+def install(path: Path, budget: int | None = None, tree: bool = False) -> list[str]:
     """Add mh's hook entries to a settings file; returns the events added.
     Idempotent — an event that already carries an `mh hook` command is left
-    exactly as it is. `budget` sizes the pack SessionStart injects."""
+    exactly as it is. `budget` sizes the pack SessionStart injects; `tree`
+    has it include the sub-checkpoints under the current checkpoint."""
     data = _load_settings(path)
     hooks_cfg = data.setdefault("hooks", {})
     if not isinstance(hooks_cfg, dict):
@@ -95,6 +96,8 @@ def install(path: Path, budget: int | None = None) -> list[str]:
     commands = dict(HOOK_COMMANDS)
     if budget is not None:
         commands["SessionStart"] += f" --budget {budget}"
+    if tree:
+        commands["SessionStart"] += " --tree"
     for event, cmd in commands.items():
         entries = hooks_cfg.setdefault(event, [])
         if not isinstance(entries, list):

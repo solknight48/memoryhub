@@ -16,9 +16,9 @@ import { readFileSync } from "node:fs";
 const page = readFileSync(process.argv[2], "utf8");
 
 // Four regions: the markdown renderer, the avatar/model helpers, the live
-// session's card builder, and the composer palette's parsing and ranking. All
-// are pure given a document, so they run outside a browser unchanged — the
-// card builder needs the two flags its call site would have set, stubbed below.
+// session's card builder, and the project-memory card. All are pure given a
+// document, so they run outside a browser unchanged — the card builder needs
+// the two flags its call site would have set, stubbed below.
 function slice(from, to) {
   const a = page.indexOf(from), b = page.indexOf(to);
   if (a < 0 || b < 0 || b < a) {
@@ -34,7 +34,6 @@ const src = slice("function el(tag", "function tip(evt") +
             // memoryCard's onclick handlers reference these; they never fire at render
             "const openOriginal = () => {};\nconst jumpToMemory = () => {};\n" +
             slice("function liveCard(", "function liveEditCard(") +
-            slice("function slashState(", "function modelItems(") +
             slice("function memoryCard(", "function jumpToMemory(");
 
 class Node {
@@ -64,7 +63,7 @@ const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, 
 function serialise(n) {
   if (typeof n !== "object" || n === null) return n;
   if (n instanceof Text) return esc(n.data);
-  if (!(n instanceof Node)) return n;  // a plain value, such as slashState's {name, args}
+  if (!(n instanceof Node)) return n;  // a plain value
   const inner = (n.text === null ? "" : esc(n.text)) + n.kids.map(serialise).join("");
   if (n.tag === "#frag") return inner;
   const style = Object.entries(n.style).map(([k, v]) => `${k}:${v}`).join(";");
@@ -82,7 +81,7 @@ const document = {
 
 const fns = new Function(
   "document",
-  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang, slashState, paletteMatches, memoryCard, sessionAvatar };"
+  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang, memoryCard, sessionAvatar };"
 )(document);
 
 const request = JSON.parse(readFileSync(0, "utf8"));

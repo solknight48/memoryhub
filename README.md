@@ -60,24 +60,26 @@ $ mh load                        # 两者的会话，按时间合并
 | 命令 | 作用 |
 |---|---|
 | `mh init [--global] [--claude] [--template T]` | 创建中枢。 |
-| `mh checkpoint [name] [--at STAGE]` | 新建检查点，并设为当前。不给名字：模板里的下一个阶段；只给 `--at`：同一阶段再来一个（`design-2`）。 |
-| `mh template [name] [--list] [--clear]` | 阶段模板——后面各检查点的默认名字。 |
+| `mh checkpoint [name] [--at STAGE] [--under CKPT]` | 新建检查点，并设为当前。不给名字：模板里的下一个阶段；只给 `--at`：同一阶段再来一个（`design-2`）；`--under`：子检查点（`design.head-page`）。 |
+| `mh template [name] [--list [-v]] [--clear]` | 阶段模板——后面各检查点的默认名字。 |
 | `mh save [CKPT] [--to CKPT] [--file MD] [--session-id ID] [--transcript P]` | 提纯当前会话并存入检查点。 |
 | `mh save [CKPT] --compact --file MD` | 存入 agent 撰写的摘要，替代完整对话。 |
+| `mh save [CKPT] --compact --with agent [--focus TEXT]` | 让这个会话自己的 CLI（`claude -p` 或 `pi -p`；`--with claude`/`pi` 指定一个）写摘要并存入。 |
 | `mh import [--to CKPT] [--agent A]... [--dry-run]` | 回填本项目的历史会话（Claude Code、pi、Codex）。 |
-| `mh load [CKPT...] [--no-links] [--budget N] [--all] [--json]` | 热启动上下文包：所选检查点 + 链接闭包，按时间合并。 |
+| `mh load [CKPT...] [--no-links] [--tree] [--budget N] [--all] [--json]` | 热启动上下文包：所选检查点 + 链接闭包，按时间合并；`--tree` 把所选检查点下的子检查点也带上。 |
 | `mh link A B` / `mh unlink A B` | 让两个检查点一起加载 / 取消。 |
 | `mh list` / `mh show CKPT[/SESSION]` / `mh search Q` | 查看中枢内容。 |
 | `mh trace CKPT/SESSION` | 找回某个保存会话所提纯自的原始 transcript。 |
 | `mh rm CKPT[/SESSION] [-x N] [--force]` | 删除检查点、会话，或单独一轮对话。 |
 | `mh mv CKPT/SESSION CKPT` / `mh rename CKPT NAME` | 移动会话 / 重命名检查点。 |
 | `mh edit CKPT/SESSION -x N [--user T] [--agent T]` | 改写一轮对话的某一侧。 |
+| `mh skip CKPT/SESSION` / `mh unskip CKPT/SESSION` | 让某个会话不进 `mh load`（仍留在检查点里）/ 恢复加载。 |
 | `mh back [N]` / `mh forward [N]` / `mh goto CKPT` | 移动当前指针。 |
 | `mh status` / `mh log` | 位置与统计 / 中枢的 git 日志。 |
 | `mh sync` | 对 `origin` 执行 `pull --rebase` + `push`，冲突自动中止。 |
 | `mh hubs [--prune]` | 列出所有已注册的中枢。 |
 | `mh ui [--port N] [--budget N\|none] [--read-only] [--detach] [--stop] [--session ID]` | 在浏览器里打开检查点地图并整理中枢。 |
-| `mh hook install [--user] [--remove] [--budget N]` | 通过 Claude Code hooks 自动 load/save。 |
+| `mh hook install [--user] [--remove] [--budget N] [--tree]` | 通过 Claude Code hooks 自动 load/save。 |
 | `mh skill install` | 安装 Claude Code skill。 |
 
 ## 保存：提纯，或压缩
@@ -133,53 +135,50 @@ token 的上下文，而不用加载整个 `/mh` 工作流。
 一条检查点时间线：节点大小对应会话数，链接用弧线相连，当前指针带外圈高亮，并按 token
 预算标出下一次 `mh load` 实际会包含哪些会话。点进去可以**删除或改写单独一轮对话**、
 删除或移动会话，以及重命名、删除、链接检查点。每次改动都是中枢里的一次提交，
-`git -C .memoryhub revert` 就是撤销。`--read-only` 只看不改，编辑入口全部隐藏。
+`git -C .memoryhub revert` 就是撤销。在终端里做的改动几秒内就会出现在地图上。`--read-only` 只看不改，编辑入口全部隐藏。
 同样的整理操作在终端里也有——`mh rm`、`mh mv`、`mh rename`、`mh edit`——agent
 不用浏览器也能按要求整理记忆。
 
-时间线是可以动手的，不只是一张图：**点一个节点**就有它的操作——打开、设为当前
-（下一次 `mh save`、`mh load` 用的那个）、重命名、在同一阶段再开一个、链接、删除。
-还没到的阶段（虚线）则可以创建、重命名、移除、在前后插入阶段、往前或往后挪——改的是
-中枢自己的 `template.toml`，所以是模板去适应项目，而不是反过来。把一个代表阶段的
-检查点改名，阶段也会跟着改。
+时间线是可以动手的，不只是一张图：**点一个节点**就弹出它的菜单——打开、设为当前
+（下一次 `mh save`、`mh load` 用的那个）、子检查点、在同一阶段再开一个、链接、取消链接、
+重命名、删除——每一项都带一行说明，用不上的置灰而不是点了才报错。打开后，检查点在下面
+展开：标题行说明这是什么，同样的操作排成工具栏，再往下是它的会话。每一行会话前有个复选框：取消勾选，`mh load` 就不再带上它——
+文件仍留在检查点里，`mh show` 和地图都还能看到，只是变淡并标上"skipped on load"
+（终端里是 `mh skip` / `mh unskip`；名单存在中枢的 `skip.toml`，重命名、移动都会跟着走）。
+还没到的阶段（虚线）则可以创建、重命名、移除、在前后插入
+阶段、往前或往后挪——改的是中枢自己的 `template.toml`，所以是模板去适应项目，而不是
+反过来。把一个代表阶段的检查点改名，阶段也会跟着改。页面上的每个提问——起名、选目标、
+"确定删除？"——都是页内弹出的小面板，从不用浏览器对话框，所以 agent 也能驱动这张地图。
 
-时间线下面还有一块**项目记忆**——Claude Code 为这个项目记下的笔记
+页面最底下是**项目记忆**——Claude Code 为这个项目记下的笔记
 （`~/.claude/projects/<project>/memory/`），只读展示：每条笔记一张卡片，带类型、
 markdown 正文、它链接到的其它笔记（`[[name]]`，可点），以及在原始 transcript 还在
 本机时、在单独一页里打开它所来自的那次会话。这个文件夹不归 mh 所有，mh 从不写它，只是把它放在
 检查点旁边一起显示。
 
-地图下面是**当前正在进行的会话**：agent 此刻正在写的 transcript，一有增长就
-重新读取，所以你在终端里说的话过一两秒就出现在浏览器里。默认只展示最新的三轮，
+面板下面是**当前正在进行的会话**（页眉的 `● live session` 按钮开关整个面板，开着时高亮，
+重新加载也记得）：agent
+此刻正在写的 transcript，一有增长就重新读取，所以你在终端里说的话过一两秒就出现在浏览器里。默认只展示最新的三轮，
 更早的一键展开，地图不会被一场长会话顶到看不见。这里是**不过滤**的：思考、正文、每一次工具调用，按 agent 真正
 产生的顺序排开，同一次回复里发出的多个工具调用会收在一条竖线下面，标成它们真实运行的
 并行批次，子 agent 的输出也标出来是它的——因为看一场正在发生的会话时，工具调用
 就是会话本身。图片也会显示：你贴进会话的图，或 agent 读过的截图，都出现在那一轮下面——
 由 mh 直接从 transcript 或文件里提供，绝不复制进中枢。（**存下来**的仍然是提纯后的对话；
-面板上的 `full output` 可以关掉原始流。）
+面板上的 "thinking" 和 "tool calls" 两个勾选框各自关掉那一部分——它们只改变页面显示什么，不影响 agent 本身。）
 会话还在跑，就可以整理它——丢掉某一轮、改写某个回答、再把它们恢复回来。这些决定存成中枢旁边的一份草稿
 （`.memoryhub/drafts/`，不追踪，不进日志），并且**每一次**保存这个会话时都会应用：
 `mh save`、SessionEnd/PreCompact hook、面板上的保存按钮都一样。所以会话中途整理掉的
 内容不会在最终保存时又回来，而整理之后新产生的对话照样会进去。agent 正在回答的那一问
 会显示出来，但不会被保存——`mh save` 一直就是这么丢掉它的。
 
-还可以**打字回去**。输入框在面板底部，会话在视野内时固定在窗口下沿；它不会伪造
-回答——mh 没有模型。它把你写的内容粘贴进
-这个会话所在的 tmux pane，就跟你自己在终端里敲一样，agent 的回答照常从 transcript 回来。
-pane 不是猜的：`mh hook load` 在会话开始时记下它（tmux 会把 `TMUX_PANE` 传进 hook），
-每次发送前都会重新确认 pane 还在、里面那个 agent 进程还活着——会话已经退出的 pane 一律
-拒绝，绝不往接管它的东西里粘。不在 tmux 里的会话会直说：先 `tmux new -s mh` 开一个，再在里面运行 `claude`，
-输入框就亮了。tmux 要作为 shell 启动，不要写成 `tmux new -s mh claude`——那样 claude
-一退出 pane 就关了，整个 tmux 会话也跟着没了；shell pane 比 `claude -c` 重启活得久，
-回到同一个 pane 里的 agent mh 认得。打字回去目前仅限 Linux——mh 通过 `/proc` 确认 pane
-里还是那个 agent。
-
-输入框还是 CLI 输入的**投影**：消息以 `/` 开头时，会列出这个会话的 agent 自己的技能和
-命令——mh 从磁盘上读（`~/.claude/skills`、项目的 `.claude/skills`、`commands/`、已安装的
-插件；pi 的 `~/.pi/agent/skills`），再加几条值得从浏览器发的内置命令；`/model` 后面列出
-CLI 认的别名和这个会话用过的模型。↑↓ 选，⏎ 或 ⇥ 填入，补上参数，Ctrl+⏎ 发出——消息照常
-粘进会话，由 CLI 自己执行，所以页面不需要知道任何一条命令做什么，名单上没有的也照发。
-mh 没验证过的 agent（codex）不给名单，只说明一句。
+面板顶部的**保存框**写明怎么存、存到哪里：目标检查点（会话已经在的那个，否则就是当前检查点；
+换一个就把会话挪过去）、两种存法各带一句说明、摘要可选的 focus，以及一个写明将要做什么的按钮。
+**对话**就是机械保存。**摘要**则请运行这个会话的
+CLI 来写摘要：mh 把提纯后的对话以 print 模式交给它（`claude -p`、`pi -p`），用的是该工具
+自己的压缩格式——Claude Code 的编号续接摘要、pi 的 Goal / Progress / Next Steps 检查点——
+在一个临时目录里运行，关闭工具和会话持久化，再把结果存为压缩保存。正在运行的会话不受任何
+影响；代价是你账户上的一次模型调用。可选的 focus 相当于 `/compact <instructions>`。终端里
+对应 `mh save --compact --with agent`。codex 会话暂无压缩。
 
 安全性：只监听回环地址，每个请求都要带启动时生成的一次性 token，并校验 `Host` 头；
 页面完全自包含，离线可用。**mh 绝不改写自己无法逐字节复现的文件**——先解析再重新渲染，
@@ -210,18 +209,28 @@ imported 17 sessions -> history (claude 11, codex 1, pi 5)
   做预算足够准，且不引入分词器依赖。
 - **名字不限文种**：`mh checkpoint 数据管道` 和 `mh checkpoint backtest`
   一样是一等公民。
-- **同一阶段可以有多个检查点**：`design`、`design-2`、`design-3` 在时间线上叠在
-  同一个节点下——名字末尾带数字就是同一阶段的又一次尝试，`mh checkpoint --at design`
+- **同一阶段可以有多个检查点**：`design`、`design-2`、`design-3` 在时间线上是穿过
+  这个阶段的并行分支，各自都连着前后的阶段——名字末尾带数字就是同一阶段的又一次尝试，`mh checkpoint --at design`
   会替你编号。`mh checkpoint dollar-bars --at research` 把一个名字里看不出阶段的
   检查点放到某个阶段（记在中枢的 `stages.toml` 里）。它们和别的检查点一样彼此独立——
   要一起加载就 link——所以并行的尝试，或者一个 worktree 一个尝试，各有各的记忆，
   又不会离开它们所属的阶段。
+- **子检查点**：检查点之下更小的范围。`mh checkpoint head-page --under design`
+  （或 `mh checkpoint design.head-page`）建出 `design.head-page`，存在 design 的目录里，
+  在它的节点下缩进画出。它是范围，不是"再来一次"：加载它会连父级一起加载（在
+  `design.head-page` 上 `mh load` 也会带上 design 的会话），只加载 design 则只有 design；
+  `--tree` 则按整个节点加载——包里的每个检查点（链接进来的也算）都带上它所在节点的全部
+  子检查点，所以在 `design.head-page` 上就是整个 design（`mh hook install --tree`
+  让会话开始时注入的包也这么做，地图上的 "with sub-checkpoints" 勾选框可以预览）。
+  父级改名、删除，子检查点跟着走；它们不算模板阶段。地图的检查点面板会列出它们，
+  并提供 "+ sub-checkpoint…"。
 - **阶段模板**：大多数项目走的是同一副骨架——计划、设计、开发、测试、部署、
   监控——各领域只是每一步叫法不同。`mh template --list` 列出十套（quant、
   frontend、backend、sdlc、mobile、devops、data、ml、sprint、hotfix）；
   `mh template quant`（或 `mh init --template quant`）把它记进中枢，之后
   `mh checkpoint` 不给名字就创建下一个阶段，`mh status` 报告项目走到了哪一步，
-  地图把还没到的阶段画成虚线节点，点一下就建。不会预先建好所有阶段，时间线上
+  地图把还没到的阶段画成虚线节点，点一下就建——第一个检查点还没建时也画；状态行写着项目走到了哪一步。
+  选模板是终端里的事，地图不管。不会预先建好所有阶段，时间线上
   的日期都是真实的。中枢里的 `template.toml` 存着这份阶段列表的副本：改它，
   项目就有了自己的顺序。
 - **可回溯到源头**：保存下来的会话记着它提纯自哪个 transcript 的 id。

@@ -133,7 +133,11 @@ def test_mh_template_list_shows_every_template_and_needs_no_hub(mh, ws):
     out = mh("template", "--list", cwd=ws["root"], check=0).stdout
     for name in templates.TEMPLATES:
         assert f"\n{name:10}" in "\n" + out
-    assert "1. Research — hypothesis" in out
+    # numbered stage names; what each stage is for is behind -v
+    assert "\n   1. Research\n   2. Design\n" in out
+    assert "hypothesis" not in out
+    long = mh("template", "--list", "-v", cwd=ws["root"], check=0).stdout
+    assert "1. Research — hypothesis" in long
     listed = json.loads(mh("template", "--list", "--json", cwd=ws["root"], check=0).stdout)
     assert [t["name"] for t in listed] == list(templates.TEMPLATES)
 
@@ -152,25 +156,25 @@ def test_mh_init_takes_a_template(mh, ws, project):
 # --- the map ----------------------------------------------------------------
 
 
-def test_the_map_carries_the_progress_and_the_catalogue(ws, hub_project):
+def test_the_map_carries_the_progress_but_does_not_choose(ws, hub_project):
+    """Choosing a template is a terminal step (mh template, mh init --template);
+    the map only shows what follows from it — the stages ahead and how far the
+    project is — and offers no picker, so there is no route for one."""
     hub = hub_of(hub_project)
     status, data = server.dispatch(hub, "GET", "/api/map", {}, {}, False)
     assert status == 200 and data["template"] is None
-    assert [t["name"] for t in data["templates"]] == list(templates.TEMPLATES)
+    assert "templates" not in data
 
-    status, rec = server.dispatch(hub, "POST", "/api/template", {}, {"name": "hotfix"}, False)
-    assert status == 200 and rec["name"] == "hotfix"
+    templates.use(hub, "hotfix")  # what `mh template hotfix` does
     server.dispatch(hub, "POST", "/api/checkpoint/create", {}, {"name": "Reproduce"}, False)
     _, data = server.dispatch(hub, "GET", "/api/map", {}, {}, False)
+    assert data["template"]["name"] == "hotfix"
     assert data["template"]["next"] == "Root Cause Analysis"
     assert [s["exists"] for s in data["template"]["stages"]][:2] == [True, False]
 
-    status, rec = server.dispatch(hub, "POST", "/api/template", {}, {"name": None}, False)
-    assert status == 200 and rec == {"name": None}
-    assert templates.read(hub) is None
-    # read-only: the picker is a mutation
-    status, _ = server.dispatch(hub, "POST", "/api/template", {}, {"name": "ml"}, True)
-    assert status == 403
+    status, _ = server.dispatch(hub, "POST", "/api/template", {}, {"name": "ml"}, False)
+    assert status == 404
+    assert templates.read(hub)["name"] == "hotfix"
 
 
 # --- editing the stages from the map ------------------------------------------

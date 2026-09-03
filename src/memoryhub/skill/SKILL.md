@@ -47,6 +47,10 @@ checkpoints load together, their sessions merged in time order.
   4. Then `mh save --compact --file <that file>`; delete the temp file after.
   It lands under the session's real identity, so it replaces (never duplicates)
   a purified save of the same session — one representation per session.
+  If the user would rather have the CLI write it ("let claude compact it"),
+  `mh save --compact --with agent [--focus <text>]` runs the session's own
+  `claude -p` / `pi -p` on the purified dialog — a model call on the user's
+  account, so only on request; the map's save button offers the same.
   Without `--file` the command fails by design; do not retry without `--compact`
   unless the user asks for the purified save instead.
 - `mh checkpoint <name>` — start a new checkpoint (becomes current). Only when
@@ -55,8 +59,15 @@ checkpoints load together, their sessions merged in time order.
 - **Another take at the same stage** ("second design", "再开一个 design",
   "one checkpoint per worktree at this stage"): `mh checkpoint --at <stage>`
   names it `<stage>-2`, `<stage>-3`, …; `mh checkpoint <name> --at <stage>`
-  keeps a name of the user's choosing. Same-stage checkpoints stack under one
-  node of the map and stay independent unless linked.
+  keeps a name of the user's choosing. Same-stage checkpoints are parallel
+  branches through the stage on the map and stay independent unless linked.
+- **A smaller scope under a checkpoint** ("sub-checkpoint for the head page",
+  "design 下面开个 footer"): `mh checkpoint <name> --under <ckpt>` (or the
+  dotted `mh checkpoint design.head-page`) creates `design.head-page`, drawn
+  indented under its parent's node. Loading it loads the parents too; loading
+  the parent alone stays at the parent, and `mh load --tree` loads whole
+  nodes — each checkpoint in the pack with its node's sub-checkpoints. Not a
+  take, not a template stage.
 - **Stage templates** — when the user asks for a project-stage template or
   default checkpoint names ("use the quant template", "按量化流程建
   checkpoint", "what templates are there"): `mh template --list` shows them
@@ -67,7 +78,8 @@ checkpoints load together, their sessions merged in time order.
   progress. `mh template --clear` stops using one. Only on explicit request.
 - `mh link A B` / `mh unlink A B` — only on explicit user request.
 - Curation (`mh rm <ckpt>[/<session>] [-x N]`, `mh mv`, `mh rename`,
-  `mh edit <ckpt>/<session> -x N --user/--agent`) — only on explicit user
+  `mh edit <ckpt>/<session> -x N --user/--agent`, `mh skip`/`mh unskip <ckpt>/<session>`
+  to leave a session out of `mh load` or bring it back) — only on explicit user
   request ("delete that exchange", "移除这段", "rename the checkpoint"). Every
   curation is a hub commit; tell the user `git -C .memoryhub revert HEAD` is
   the undo.

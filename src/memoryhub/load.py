@@ -48,6 +48,7 @@ class LoadResult:
     used: int
     over_budget: bool
     sha: str
+    skipped: list[str]  # left out on request (mh skip, the map's checkbox)
 
 
 def build(
@@ -55,6 +56,7 @@ def build(
     refs: list[str] | None,
     follow_links: bool,
     budget: int | None,
+    tree: bool = False,
 ) -> LoadResult:
     all_cps = ck.list_checkpoints(hub)
     if refs:
@@ -66,14 +68,35 @@ def build(
         base = [ck.resolve(hub, current)]
 
     slugs = {c.slug for c in base}
+    links = ck.read_links(hub) if follow_links else []
     expanded = False
-    if follow_links:
-        full = ck.closure(slugs, ck.read_links(hub))
-        expanded = full != slugs
-        slugs = full
+    # The pack is closed under three rules, applied until nothing more joins:
+    # a sub-checkpoint brings its parents (a scope includes what it sits in);
+    # with `tree`, every checkpoint brings its whole node — the top-level
+    # checkpoint it sits under and everything below that; and a link brings
+    # its partner. The parent alone, without `tree`, stays the parent.
+    while True:
+        before = len(slugs)
+        for s in list(slugs):
+            parts = s.split(".")
+            slugs.update(".".join(parts[:i]) for i in range(1, len(parts)))
+        if tree:
+            roots = {s.split(".", 1)[0] for s in slugs}
+            slugs.update(c.slug for c in all_cps if c.slug.split(".", 1)[0] in roots)
+        if links:
+            full = ck.closure(slugs, links)
+            expanded = expanded or full != slugs
+            slugs = full
+        if len(slugs) == before:
+            break
 
     selected = [c for c in all_cps if c.slug in slugs]
     files = sorted(((f, c.slug) for c in selected for f in c.sessions), key=lambda t: t[0].name)
+    # a skipped session stays in its checkpoint but never in the pack — the
+    # user said so (mh skip, or the checkbox on the map's session row)
+    skips = ck.read_skips(hub)
+    skipped = [f"{slug}/{f.name}" for f, slug in files if f"{slug}/{f.name}" in skips]
+    files = [(f, slug) for f, slug in files if f"{slug}/{f.name}" not in skips]
 
     blocks = []
     for path, slug in files:
@@ -138,6 +161,11 @@ def build(
             f"\n<!-- mh: omitted {len(omitted)} older session(s) for budget: "
             f"{', '.join(omitted)} — fetch with `mh show <checkpoint>/<file>` -->\n"
         )
+    if skipped:
+        parts.append(
+            f"\n<!-- mh: skipped {len(skipped)} session(s) on request: {', '.join(skipped)}"
+            f" — `mh unskip <checkpoint>/<file>` loads them again -->\n"
+        )
 
     return LoadResult(
         text="".join(parts),
@@ -149,4 +177,5 @@ def build(
         used=used,
         over_budget=over_budget,
         sha=sha,
+        skipped=skipped,
     )
