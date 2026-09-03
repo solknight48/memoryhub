@@ -410,6 +410,14 @@ def rename_checkpoint(hub: Path, ref: str, name: str) -> dict:
     # The created stamp is preserved: it defines walk order.
     c.path.rename(c.path.with_name(f"{c.created}_{new_slug}"))
     _relink(hub, rename=(c.slug, new_slug))
+    from . import templates  # a stage of the template is renamed with it
+
+    if templates.rename_stage(hub, c.slug, name):
+        # the stage moved with the checkpoint, so its new name is its column —
+        # not the old one _relink pinned it to
+        placed = ck.read_stages(hub)
+        if placed.pop(new_slug, None) is not None:
+            ck.write_stages(hub, placed)
     if read_current(hub) == c.slug:
         write_current(hub, new_slug)
     git.auto_commit(hub, f"curate: rename checkpoint {c.slug} -> {new_slug}")

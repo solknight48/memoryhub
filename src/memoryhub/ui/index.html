@@ -349,6 +349,8 @@ pre .t { color: var(--c-type); }
 #menu button { display: block; width: 100%; text-align: left; border: 0;
                background: transparent; padding: 6px 10px; border-radius: 8px; }
 #menu button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+#menu button[disabled] { color: var(--muted); cursor: default; }
+#menu button[disabled]:hover { background: transparent; }
 </style>
 </head>
 <body>
@@ -378,7 +380,7 @@ pre .t { color: var(--c-type); }
       <span><i class="key" style="background:var(--neutral-mark)"></i> not loaded</span>
       <span><i class="key" style="background:transparent;border:2px solid var(--text-primary)"></i> current pointer</span>
       <span id="legend-ahead" hidden><i class="key" style="background:transparent;border:2px dashed var(--muted)"></i> stage ahead (template)</span>
-      <span class="muted">arc = link (loads together) · node size = sessions</span>
+      <span class="muted">arc = link (loads together) · node size = sessions · click a node for its actions</span>
     </div>
   </section>
 
@@ -395,6 +397,7 @@ pre .t { color: var(--c-type); }
   <section id="ckptsec" hidden>
     <h2 id="ckpttitle"></h2>
     <div class="row" style="margin-bottom:12px" id="ckactions">
+      <button id="ck-current" title="Point the current pointer here: the next mh save and mh load use it">make current</button>
       <button id="ck-another" title="One more checkpoint at this stage — design, design-2, design-3…">+ another here</button>
       <button id="ck-rename">rename</button>
       <button id="ck-link">link to…</button>
@@ -968,9 +971,10 @@ function drawMap() {
         slug + (col.stage !== slug ? ` · at ${col.stage}` : ""),
         `created ${c.created.slice(0, 10)} · ${c.sessions.length} session${c.sessions.length === 1 ? "" : "s"} · ~${toks} tokens`,
         active ? "included in the next mh load" : "not in the next mh load",
+        RO ? "click to open" : "click for actions",
       ]));
       g.addEventListener("mouseleave", untip);
-      g.addEventListener("click", () => selectCheckpoint(slug));
+      g.addEventListener("click", () => { untip(); if (RO) selectCheckpoint(slug); else nodeMenu(g, c, col); });
       host.appendChild(g);
     });
     if (col.ghost) {
@@ -985,10 +989,10 @@ function drawMap() {
       g.addEventListener("mousemove", (e) => tip(e, [
         col.name,
         `stage ${n} of ${DATA.template.total} in ${DATA.template.name} — not created yet`,
-        RO ? "" : (first ? "click to create it (it becomes current)" : "click to create it out of turn"),
+        RO ? "" : "click for actions: create it, rename or remove the stage, insert or move stages",
       ].filter(Boolean)));
       g.addEventListener("mouseleave", untip);
-      if (!RO) g.addEventListener("click", () => createCheckpoint(col.name));
+      if (!RO) g.addEventListener("click", () => { untip(); stageMenu(g, col.name, first); });
       host.appendChild(g);
     }
   });
@@ -1081,7 +1085,22 @@ function initialsFor(file) {
   const key = sessionKey(file);
   if (key.startsWith("pi-")) return "PI";
   if (key.startsWith("cx-")) return "CX";
-  return (key.slice(0, 2) || "??").toUpperCase();
+  return "CL";
+}
+// The session's avatar says which model ran it — "F5" for Fable 5.1, "S4" for
+// Sonnet 4.5, "G5" for gpt-5 — in the same colour the exchange chips give that
+// model, so a session and its exchanges match by eye. A session with no model
+// recorded (compacted, or saved before mh kept models) shows its agent instead.
+function sessionAvatar(model, file) {
+  if (!model) {
+    const key = sessionKey(file);
+    return { text: initialsFor(file), color: avatarColor(key), title: "model not recorded" };
+  }
+  const label = modelLabel(model);
+  const letter = (label.match(/[A-Za-z]/) || [""])[0].toUpperCase();
+  const digit = (label.match(/\d/) || [""])[0];
+  return { text: (letter + digit) || label.slice(0, 2).toUpperCase(), color: avatarColor(model),
+           title: label === model ? model : `${label} · ${model}` };
 }
 // "claude-sonnet-4-5-20250929" -> "Sonnet 4.5". Anything mh does not recognise
 // is shown exactly as the session file records it — a raw id is short and
@@ -1122,6 +1141,8 @@ function selectCheckpoint(slug) {
   $("ckptsec").hidden = false;
   const at = c.stage && c.stage !== c.slug ? ` · at ${c.stage}` : "";
   $("ckpttitle").textContent = `${c.slug}${at} · created ${c.created.replace("_", " ")}`;
+  $("ck-current").disabled = c.slug === DATA.current;
+  $("ck-current").textContent = c.slug === DATA.current ? "✓ current" : "make current";
   const omitted = new Set(DATA.load.omitted);
   const list = $("sessions");
   list.textContent = "";
@@ -1130,8 +1151,9 @@ function selectCheckpoint(slug) {
       text: "Nothing here yet — this checkpoint is waiting for its first session." }));
   }
   c.sessions.forEach((s) => {
-    const av = el("div", { class: "avatar", text: initialsFor(s.file) });
-    av.style.background = avatarColor(sessionKey(s.file));
+    const who = sessionAvatar(s.model, s.file);
+    const av = el("div", { class: "avatar", text: who.text, title: who.title });
+    av.style.background = who.color;
     const title = el("div", { class: "stitle", text: niceStamp(s.file) },
       el("span", { class: "skey", text: "‹" + sessionKey(s.file) + "›" }));
     if (omitted.has(s.id)) title.appendChild(el("span", { class: "badge", text: "over budget" }));
@@ -1774,6 +1796,79 @@ function createCheckpoint(name, at) {
   act("/api/checkpoint/create", { name, at }, (r) => `checkpoint ${r.slug} created`);
 }
 
+// Everything the CLI can do to a checkpoint, from its node: open the panel,
+// point `current` at it, rename, another take at its stage, link, delete —
+// and, when it stands for a template stage, insert stages around it.
+function nodeMenu(anchor, c, col) {
+  const isCurrent = c.slug === DATA.current;
+  const stageOf = DATA.template ? DATA.template.stages.find((st) => st.slug === col.stage) : null;
+  const items = [
+    [`open ${c.slug}`, () => selectCheckpoint(c.slug)],
+    [isCurrent ? "✓ current" : "make current", isCurrent ? null : () => makeCurrent(c.slug)],
+    ["rename…", () => ask(anchor, `rename ${c.slug} to…`, c.slug, (name) =>
+      act("/api/checkpoint/rename", { slug: c.slug, name }, (r) => `renamed to ${r.slug}`,
+        (r) => { if (SEL_CK === c.slug) { SEL_CK = r.slug; selectCheckpoint(r.slug); } }))],
+    [`+ another at ${col.stage}`, () => createCheckpoint(null, col.stage)],
+    ["link to…", () => menu(anchor, `link ${c.slug} with…`,
+      DATA.checkpoints.map((x) => x.slug).filter((x) => x !== c.slug), "nothing to link to",
+      (b) => act("/api/link", { a: c.slug, b }, "linked"))],
+  ];
+  if (stageOf) {
+    items.push(["insert a stage before…", () => insertStage(anchor, stageOf.name, 0)]);
+    items.push(["insert a stage after…", () => insertStage(anchor, stageOf.name, 1)]);
+  }
+  items.push(["delete…", () => {
+    if (!confirm(`Delete checkpoint ${c.slug} and its ${c.sessions.length} session(s)?\n\nThe hub keeps everything in git history.`)) return;
+    if (SEL_CK === c.slug) { SEL_CK = null; $("ckptsec").hidden = true; $("sessec").hidden = true; }
+    act("/api/checkpoint/delete", { slug: c.slug }, "checkpoint deleted");
+  }]);
+  actionMenu(anchor, c.slug + (col.stage !== c.slug ? ` · at ${col.stage}` : ""), items);
+}
+
+// A stage still ahead: create it, or edit the template's list around it.
+function stageMenu(anchor, name, isNext) {
+  const t = DATA.template, i = t.stages.findIndex((st) => st.name === name);
+  const items = [
+    [isNext ? `▶ create ${name} — next stage` : `create ${name} out of turn`, () => createCheckpoint(name)],
+    ["rename stage…", () => ask(anchor, `rename stage ${name} to…`, name, (v) =>
+      setStages(t.stages.map((st, k) => (k === i ? v : st.name)), `stage renamed to ${v}`))],
+    ["insert a stage before…", () => insertStage(anchor, name, 0)],
+    ["insert a stage after…", () => insertStage(anchor, name, 1)],
+  ];
+  if (i > 0) items.push(["move earlier", () => setStages(swapped(t.stages.map((st) => st.name), i, i - 1), `${name} moved earlier`)]);
+  if (i < t.stages.length - 1) items.push(["move later", () => setStages(swapped(t.stages.map((st) => st.name), i, i + 1), `${name} moved later`)]);
+  items.push(["remove stage", () => {
+    if (!confirm(`Remove the stage "${name}" from the ${t.name} template?\n\nNo checkpoint is touched; the template just stops expecting it.`)) return;
+    setStages(t.stages.map((st) => st.name).filter((_, k) => k !== i), `stage ${name} removed`);
+  }]);
+  actionMenu(anchor, `${name} — stage ${i + 1} of ${t.total}, not created yet`, items);
+}
+
+function insertStage(anchor, near, offset) {
+  const names = DATA.template.stages.map((st) => st.name);
+  const i = names.indexOf(near);
+  ask(anchor, `new stage ${offset ? "after" : "before"} ${near}`, "", (v) => {
+    const next = names.slice();
+    next.splice(i + offset, 0, v);
+    setStages(next, `stage ${v} added`);
+  });
+}
+
+const swapped = (arr, i, j) => { const out = arr.slice(); [out[i], out[j]] = [out[j], out[i]]; return out; };
+const setStages = (stages, msg) => act("/api/template/stages", { stages }, msg);
+const makeCurrent = (slug) => act("/api/goto", { slug }, (r) => `current is now ${r.current}`);
+
+// a menu of labelled actions (menu() takes bare strings, which is right for
+// picking a name and wrong for a verb list)
+function actionMenu(anchor, label, items) {
+  closeMenu();
+  const m = el("div", { id: "menu" }, el("div", { class: "menu-label", text: label }));
+  items.forEach(([text, fn]) => m.appendChild(el("button", { text, disabled: fn ? null : "", onclick: (e) => {
+    e.stopPropagation(); closeMenu(); if (fn) fn();
+  } })));
+  openMenu(m, anchor);
+}
+
 function deleteSession(s) {
   if (!confirm(`Delete session ${s.file}? The hub keeps it in git history.`)) return;
   $("sessec").hidden = true;
@@ -1832,6 +1927,7 @@ function wire() {
           name ? `template ${name} — mh names the stages from here` : "template cleared");
       });
   };
+  $("ck-current").onclick = () => { if (SEL_CK) makeCurrent(SEL_CK); };
   $("ck-another").onclick = () => {
     const c = DATA.checkpoints.find((x) => x.slug === SEL_CK);
     if (c) createCheckpoint(null, c.stage || c.slug);

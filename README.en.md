@@ -155,6 +155,14 @@ Every change is a commit in the hub, so `git -C .memoryhub revert` is the undo.
 from a terminal — `mh rm`, `mh mv`, `mh rename`, `mh edit` — so an agent can
 curate memory on request without a browser.
 
+The timeline is a working surface, not a picture: **click a node** for its
+actions — open it, make it current (what the next `mh save` and `mh load`
+use), rename it, add another take at its stage, link it, delete it. A stage
+still ahead (dashed) offers create, rename, remove, insert a stage before or
+after, move earlier or later — edits to the hub's own `template.toml`, so
+the template fits the project instead of the other way round. Renaming a
+checkpoint that stands for a stage renames the stage with it.
+
 Under the timeline sits **project memory** — the notes Claude Code keeps about
 this project (`~/.claude/projects/<project>/memory/`), shown read-only: one card
 per note with its type, its markdown body, the notes it links to (`[[name]]`,

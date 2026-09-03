@@ -14,7 +14,7 @@ import pytest
 
 from conftest import git_run
 from memoryhub import checkpoint as ck
-from memoryhub import server, templates
+from memoryhub import curate, server, templates
 from memoryhub.hub import MhError
 
 
@@ -171,3 +171,64 @@ def test_the_map_carries_the_progress_and_the_catalogue(ws, hub_project):
     # read-only: the picker is a mutation
     status, _ = server.dispatch(hub, "POST", "/api/template", {}, {"name": "ml"}, True)
     assert status == 403
+
+
+# --- editing the stages from the map ------------------------------------------
+
+
+def test_set_stages_replaces_the_list_and_keeps_the_name(ws, hub_project):
+    hub = hub_of(hub_project)
+    templates.use(hub, "hotfix")
+    ck.create(hub, "Reproduce")
+    p = templates.set_stages(hub, ["Reproduce", "Triage", "Fix Development", "Ship"])
+    assert p["name"] == "hotfix" and [s["name"] for s in p["stages"]][:2] == ["Reproduce", "Triage"]
+    assert p["next"] == "Triage" and p["total"] == 4
+    assert templates.read(hub)["stages"] == ["Reproduce", "Triage", "Fix Development", "Ship"]
+    assert "stages edited (4)" in git_run(hub, ws["env"], "log", "--oneline", "-1")
+
+
+def test_set_stages_refuses_empty_blank_or_clashing_names(ws, hub_project):
+    hub = hub_of(hub_project)
+    with pytest.raises(MhError, match="no template is set"):
+        templates.set_stages(hub, ["a"])
+    templates.use(hub, "sdlc")
+    with pytest.raises(MhError, match="at least one stage"):
+        templates.set_stages(hub, [])
+    with pytest.raises(MhError, match="every stage needs a name"):
+        templates.set_stages(hub, ["Plan", "  "])
+    with pytest.raises(MhError, match="would share the name 'design'"):
+        templates.set_stages(hub, ["Design", "design"])
+    assert templates.read(hub)["stages"][0] == "Planning"  # untouched by the refusals
+
+
+def test_renaming_a_stage_checkpoint_renames_the_stage_too(ws, hub_project):
+    hub = hub_of(hub_project)
+    templates.use(hub, "sdlc")
+    ck.create(hub, "Planning")
+    curate.rename_checkpoint(hub, "planning", "Scoping")
+    rec = templates.read(hub)
+    assert rec["stages"][0] == "Scoping"  # the old name is not "still ahead"
+    p = templates.progress(hub)
+    assert p["stages"][0] == {"name": "Scoping", "slug": "scoping", "exists": True}
+    assert p["next"] == "Analysis"
+    # a checkpoint that is no stage leaves the template alone
+    ck.create(hub, "spike")
+    curate.rename_checkpoint(hub, "spike", "probe")
+    assert templates.read(hub)["stages"] == rec["stages"]
+
+
+def test_the_map_can_move_the_pointer_and_edit_the_stages(ws, hub_project):
+    hub = hub_of(hub_project)
+    ck.create(hub, "alpha")
+    ck.create(hub, "beta")
+    status, r = server.dispatch(hub, "POST", "/api/goto", {}, {"slug": "alp"}, False)  # a prefix
+    assert status == 200 and r == {"current": "alpha"}
+    _, data = server.dispatch(hub, "GET", "/api/map", {}, {}, False)
+    assert data["current"] == "alpha"
+    templates.use(hub, "hotfix")
+    status, p = server.dispatch(
+        hub, "POST", "/api/template/stages", {}, {"stages": ["One", "Two"]}, False
+    )
+    assert status == 200 and [s["name"] for s in p["stages"]] == ["One", "Two"]
+    status, _ = server.dispatch(hub, "POST", "/api/goto", {}, {"slug": "beta"}, True)
+    assert status == 403  # read-only: the pointer is a mutation like any other

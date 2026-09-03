@@ -211,15 +211,54 @@ def use(hub: Path, name: str) -> dict:
     the project owns its sequence: editing the file changes it, and a later
     change to mh's built-ins does not."""
     t = get(name)
-    rows = ",\n  ".join(json.dumps(s) for s, _ in t.stages)
+    _write(hub, t.name, [s for s, _ in t.stages])
+    git.auto_commit(hub, f"template: {t.name}")
+    return read(hub)
+
+
+def _write(hub: Path, name: str, stages: list[str]) -> None:
+    rows = ",\n  ".join(json.dumps(s) for s in stages)
     path(hub).write_text(
         f"# Stage template: checkpoint names `mh checkpoint` (no name) creates in order.\n"
         f"# Edit the list to fit the project; a stage already created stays where it is.\n"
-        f'name = "{t.name}"\nstages = [\n  {rows},\n]\n',
+        f'name = "{name}"\nstages = [\n  {rows},\n]\n',
         encoding="utf-8",
     )
-    git.auto_commit(hub, f"template: {t.name}")
-    return read(hub)
+
+
+def set_stages(hub: Path, stages: list) -> dict:
+    """Replace the hub's stage list — the map's stage editing lands here.
+    Names must be non-empty and distinct as slugs; the template's name stays."""
+    rec = read(hub)
+    if rec is None:
+        raise MhError("no template is set (mh template <name>)")
+    if not isinstance(stages, list) or not stages:
+        raise MhError("a template needs at least one stage")
+    cleaned = []
+    for st in stages:
+        if not isinstance(st, str) or not st.strip():
+            raise MhError("every stage needs a name")
+        cleaned.append(st.strip())
+    slugs = [ck.slugify(st) for st in cleaned]
+    if len(set(slugs)) != len(slugs):
+        dup = next(sl for sl in slugs if slugs.count(sl) > 1)
+        raise MhError(f"two stages would share the name '{dup}'")
+    _write(hub, rec["name"], cleaned)
+    git.auto_commit(hub, f"template: stages edited ({len(cleaned)})")
+    return progress(hub)
+
+
+def rename_stage(hub: Path, old_slug: str, new_name: str) -> bool:
+    """A checkpoint that was a template stage was renamed: the stage follows,
+    so the template does not show the old name as still ahead."""
+    rec = read(hub)
+    if rec is None:
+        return False
+    stages = [new_name.strip() if ck.slugify(st) == old_slug else st for st in rec["stages"]]
+    if stages == rec["stages"]:
+        return False
+    _write(hub, rec["name"], stages)
+    return True
 
 
 def clear(hub: Path) -> bool:

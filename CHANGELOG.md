@@ -7,6 +7,12 @@ All notable changes to `mh` are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- The timeline acts: click a node for open / make current / rename / another
+  take / link / delete; a stage ahead offers create / rename / remove / insert
+  before or after / move earlier or later, editing the hub's `template.toml`
+  (`POST /api/template/stages`, `POST /api/goto`). The checkpoint panel gains
+  "make current". Renaming a checkpoint that is a template stage renames the
+  stage with it (`mh rename` too).
 - **Project memory in the map**: the notes Claude Code keeps about a project
   (`~/.claude/projects/<project>/memory/`) are shown read-only under the
   timeline — one card per note with its type, markdown body, `[[name]]` links
@@ -67,6 +73,9 @@ All notable changes to `mh` are recorded here. The format follows
 - `CONTRIBUTING.md`, `.editorconfig`, a `ruff` configuration and a CI lint job.
 
 ### Changed
+- A session's avatar in the map names the model that ran it ("F5", "S4",
+  "G5") in the colour its exchange chips use, instead of two characters of
+  the session id; the agent shows when no model was recorded.
 - The default load budget is 20000 tokens (was 6000): about a tenth of a 200k
   context, three or four typical sessions instead of one. `mh hook install
   --budget N` sizes the pack the SessionStart hook injects.

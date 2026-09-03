@@ -82,7 +82,7 @@ const document = {
 
 const fns = new Function(
   "document",
-  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang, slashState, paletteMatches, memoryCard };"
+  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang, slashState, paletteMatches, memoryCard, sessionAvatar };"
 )(document);
 
 const request = JSON.parse(readFileSync(0, "utf8"));

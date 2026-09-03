@@ -36,7 +36,7 @@ from . import live as livemod
 from . import memory as memorymod
 from . import relay as relaymod
 from . import templates as tmpl
-from .hub import MhError, project_root_of, read_current
+from .hub import MhError, project_root_of, read_current, write_current
 
 MAX_BODY = 4 * 1024 * 1024
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
@@ -71,10 +71,14 @@ def _session_rows(c: ck.Checkpoint) -> list[dict]:
         preview = " ".join(first.split())
         if len(preview) > 160:
             preview = preview[:160] + "…"
+        # the model that answered most of the session, "" when none was recorded
+        named = [m for m in (parsed.models if parsed else []) if m]
+        model = max(set(named), key=named.count) if named else ""
         rows.append(
             {
                 "file": p.name,
                 "id": f"{c.slug}/{p.name}",
+                "model": model,
                 "tokens": load.estimate_tokens(text),
                 "exchanges": len(parsed.turns) if parsed else None,
                 "editable": bool(parsed and parsed.editable),
@@ -444,6 +448,14 @@ def dispatch(
             return 200, tmpl.use(hub, str(body["name"]))
         tmpl.clear(hub)
         return 200, {"name": None}
+    if path == "/api/template/stages":
+        (stages,) = _need(body, "stages")
+        return 200, tmpl.set_stages(hub, stages)
+    if path == "/api/goto":
+        (slug,) = _need(body, "slug")
+        c = ck.resolve(hub, str(slug))
+        write_current(hub, c.slug)
+        return 200, {"current": c.slug}
     if path == "/api/link":
         a, b = _need(body, "a", "b")
         edge = ck.add_link(hub, a, b)

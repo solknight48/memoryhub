@@ -317,3 +317,42 @@ def test_the_badge_keeps_the_raw_id_on_hover():
     assert 'title="claude-sonnet-4-5-20250929"' in chip  # the file's own value
     assert ">Sonnet 4.5<" in chip
     assert "background:" in chip  # the deterministic colour dot
+
+
+# --- the session avatar ------------------------------------------------------
+
+
+@needs_node
+def test_the_session_avatar_names_the_model_in_its_chip_colour():
+    """A session's avatar is the model that ran it — family initial plus major
+    version — in the colour the exchange chips give that model; without a
+    recorded model it falls back to the agent."""
+    out = run_ui_js(
+        sessionAvatar=[
+            ["claude-fable-5-1", "2026-09-02_2233_81683184.md"],
+            ["claude-sonnet-4-5-20250929", "2026-01-01_0000_deadbeef.md"],
+            ["gpt-5", "2026-01-01_0000_cx-abc.md"],
+            ["", "2026-01-01_0000_pi-019f.md"],
+            ["", "2026-01-01_0000_30467899.md"],
+        ],
+        avatarColor=["claude-fable-5-1"],
+    )
+    avatars = out["sessionAvatar"]
+    assert [a["text"] for a in avatars] == ["F5", "S4", "G5", "PI", "CL"]
+    assert avatars[0]["title"] == "Fable 5.1 · claude-fable-5-1"
+    assert avatars[2]["title"] == "gpt-5"  # an id mh cannot pretty-print is shown as is
+    assert avatars[3]["title"] == "model not recorded"
+    assert avatars[0]["color"] == out["avatarColor"][0]  # the same colour as its chip
+
+
+def test_the_map_row_carries_the_sessions_dominant_model(mh, ws, hub_project):
+    _body(
+        hub_project,
+        mh,
+        ws,
+        [("q1", "a1"), ("q2", "a2"), ("q3", "a3")],
+        model=["claude-opus-5", "claude-fable-5", "claude-fable-5"],
+    )
+    _, data = server.dispatch(hub_project / ".memoryhub", "GET", "/api/map", {}, {}, False)
+    (row,) = data["checkpoints"][0]["sessions"]
+    assert row["model"] == "claude-fable-5"  # two of three exchanges
