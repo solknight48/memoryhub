@@ -1,30 +1,73 @@
-# MemoryHub (`mh`)
+<p align="center">
+  <strong>English</strong> · <a href="./README.zh.md">简体中文</a>
+</p>
 
-**English** | [简体中文](README.zh.md)
+![The MemoryHub map: a project's sessions as checkpoints on a timeline](docs/img/map.png)
+
+# MemoryHub
+
+**Manage every AI coding session as git-backed memory — save it purified, load it back, curate it on a map.**
+
+MemoryHub (`mh`) is a small Python CLI and a local web map for Claude Code, pi and Codex. A session ends and `mh save` keeps it; the next session runs `mh load` and the project's memory is back; `mh ui` is where you manage all of it.
+
+- **Every session kept, none of the noise** — purified to the User/Agent dialog by rule, no model call, stored as a file in a checkpoint, committed to a git repo you own
+- **Loaded when it matters** — the next session starts from the checkpoint you are at, its parents and its links, newest first within a token budget
+- **Curated, not hoarded** — skip a session, drop or rewrite an exchange, move a session, write a summary instead, from the map or the terminal
+- **Shaped like the project** — stages from a template, parallel takes at a stage, sub-checkpoints for a smaller scope, links between the ones that belong together
 
 [![CI](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml/badge.svg)](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)
+![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?style=flat-square)
+![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20pi%20%C2%B7%20Codex-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.2.0-0891b2?style=flat-square)
 
-Git-like checkpoints for AI session context. A session ends, `mh save` stores it
-purified — the dialog only, no tool noise, no model call. The next session runs
-`mh load` and the project's memory is back. `mh ui` is the map of it all.
+```bash
+uv tool install git+https://github.com/solknight48/memoryhub && mh skill install
+```
 
-![The timeline: stages, a second take, sub-checkpoints, a link, the stages still ahead](docs/img/map.png)
+Linux or macOS · git ≥ 2.32 · Python ≥ 3.12. See the [changelog](CHANGELOG.md) for what is new.
 
-## Install
+## See it in action
 
-```sh
+Real captures of the map on a small café-site project, not mockups.
+
+| Click a node | Open a checkpoint | Save the running session |
+|---|---|---|
+| ![The node menu: open, make current, sub-checkpoint, another take, link, rename, delete](docs/img/node-menu.png) | ![A checkpoint's sessions; one unticked and skipped on load](docs/img/checkpoint.png) | ![The save box: dialog or summary, to which checkpoint](docs/img/save-box.png) |
+| Everything you can do to it, with a word on each. | Untick a session and every load leaves it out. | Dialog as it is, or a summary the agent writes. |
+
+A saved session is the dialog and nothing else. Edit or delete an exchange; the hub keeps the history.
+
+![A saved session, purified, with edit and delete on each exchange](docs/img/session.png)
+
+The session running right now, thinking and tool calls included, with the save box on top.
+
+![The live session panel with the save box](docs/img/live.png)
+
+New checkpoint: the template's next stage, another take at this one, a sub-checkpoint, or any name.
+
+![The new-checkpoint menu](docs/img/new-checkpoint.png)
+
+## Quick start
+
+### 1. Install
+
+```bash
 uv tool install git+https://github.com/solknight48/memoryhub
 mh skill install           # teaches Claude Code the /mh workflow
 ```
 
-Linux or macOS, git ≥ 2.32, Python ≥ 3.12.
+### 2. Give the project a hub
 
-## Quick start
-
-```sh
+```bash
 cd my-site
-mh init --template frontend   # a hub in the project, stage names ready
+mh init --template frontend   # .memoryhub/ with the stages of a frontend project
 mh checkpoint                 # the first stage: requirement-analysis
+```
+
+### 3. Work, save, load
+
+```bash
 # … work with Claude Code; at the end the agent runs:
 mh save                       # this session, purified, into the checkpoint
 # next time:
@@ -32,33 +75,42 @@ mh load                       # the memory, back in context
 mh ui                         # the map
 ```
 
-`mh hook install` makes Claude Code do the load and the save itself.
+`mh hook install` makes Claude Code run the load at session start and the save at the end.
 
-## The map
+## Manage sessions
 
-Click a node for what you can do with it.
+| You want to | On the map | In the terminal |
+|---|---|---|
+| Keep this session | save box → **Dialog** | `mh save` |
+| Keep a summary instead | save box → **Summary** | `mh save --compact --with agent` |
+| Leave a session out of loads | untick it | `mh skip CKPT/SESSION` |
+| Fix or drop one exchange | edit / delete on the exchange | `mh edit`, `mh rm -x N` |
+| Move a session elsewhere | move… on its row | `mh mv CKPT/SESSION CKPT` |
+| Load two checkpoints together | node → Link to… | `mh link A B` |
+| Work in a smaller scope | node → Sub-checkpoint… | `mh checkpoint NAME --under CKPT` |
+| Try the stage again, in parallel | node → Another take | `mh checkpoint --at STAGE` |
+| Load a node whole | tick "with sub-checkpoints" | `mh load --tree` |
+| Find where a session came from | open original ↗ | `mh trace CKPT/SESSION` |
+| Bring in past sessions | — | `mh import` |
+| Undo anything | — | `git -C .memoryhub revert HEAD` |
 
-![The node menu](docs/img/node-menu.png)
+## Why MemoryHub
 
-A checkpoint and its sessions. Untick a session and `mh load` leaves it out.
+- **Purified, mechanically** — tool calls, thinking, harness wrappers and the unanswered last question are stripped by rule. What is stored reads like the conversation, and costs nothing to produce.
+- **A git repo, not a database** — `.memoryhub/` is plain markdown in a normal repository: diff it, push it, revert it, read it without mh.
+- **Independent by default** — checkpoints load alone unless you link them; a sub-checkpoint loads inside its parents; a take is a parallel path, not a copy.
+- **The map tells the truth** — purple is exactly what the next `mh load` packs; a link the load does not reach is grey; a terminal change shows up within a poll.
+- **Local only** — loopback, a per-run token, no cloud. Nothing leaves the machine unless you push the hub. The one model call there is, the summary, uses the CLI you already run.
 
-![A checkpoint with a skipped session](docs/img/checkpoint.png)
+## How it works
 
-A session, purified: the dialog and nothing else. Edit or delete an exchange.
-
-![A saved session](docs/img/session.png)
-
-The session running right now, thinking and tool calls included, with the save
-box on top: store it as the dialog, or as a summary the agent writes.
-
-![The live session](docs/img/live.png)
-
-![The save box, summary chosen](docs/img/save-box.png)
-
-New checkpoint: the template's next stage, another take at this one, a
-sub-checkpoint, or any name.
-
-![The new-checkpoint menu](docs/img/new-checkpoint.png)
+| Step | What happens |
+|---|---|
+| **Save** | The session's transcript is found, each user turn paired with the reply that followed, everything else stripped. |
+| **Store** | The dialog lands as `<end-time>_<session>.md` in the current checkpoint, one commit in the hub. A session lives in exactly one checkpoint. |
+| **Load** | The current checkpoint, its parents and its links; sessions merged by time, newest first, within the budget (20 000 tokens by default). |
+| **Map** | `mh ui` draws the hub: stages, takes, sub-checkpoints, links, what the next load packs, and the session being written right now. |
+| **Curate** | Skips, edits, moves and summaries are commits like any other; the map and the CLI share one rule for each. |
 
 ## Commands
 
@@ -89,47 +141,24 @@ sub-checkpoint, or any name.
 
 ## Hands-free
 
-```sh
+```bash
 mh hook install            # this project: load at session start, save at the end
 mh hook install --user     # every project
+mh hook install --remove   # undo
 ```
 
-The SessionStart hook injects `mh load`; SessionEnd and PreCompact run `mh save`.
-`mh hook install --remove` undoes it.
+SessionStart injects `mh load`; SessionEnd and PreCompact run `mh save`.
 
-## Good to know
+## Reference and scope
 
-- **Purified** means the User/Agent dialog only. Tool calls, thinking, harness
-  wrappers and the unanswered last question are stripped by rule, mechanically.
-- **Checkpoints are independent.** `mh link A B` makes two load together, merged
-  in time order. `mh load` packs the newest sessions first, within `--budget`
-  (20 000 tokens by default).
-- **Takes**: `design-2` is another path through the same stage. **Sub-checkpoints**:
-  `design.header` is a scope inside design; loading it loads design too, and
-  `--tree` loads a node whole.
-- **Templates** name the stages of a kind of project (`mh template --list`).
-  Chosen in the terminal; the map draws the stages still ahead.
-- **Skip** a session (`mh skip`, or the box on its row) and every load leaves
-  it out while it stays in its checkpoint.
-- **Summary instead of dialog**: `mh save --compact --with agent` has the
-  session's own CLI (`claude -p`, `pi -p`) write it — one model call, the
-  running session untouched.
-- **Every change is a commit** in `.memoryhub/`, a normal git repo you can push.
-  `git -C .memoryhub revert HEAD` is the undo.
-- **Local only.** The map listens on loopback with a per-run token. Nothing
-  leaves the machine unless you push the hub.
-
-## Development
-
-```sh
-uv run pytest -q           # the suite, hermetic, in parallel
-uv run ruff check src tests && uv run ruff format --check src tests
-```
-
-[CONTRIBUTING.md](CONTRIBUTING.md) has the invariants a change must keep;
-[CHANGELOG.md](CHANGELOG.md) what changed when. `scripts/showcase.py` rebuilds
-the screenshots above from a throwaway project.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — the invariants a change must keep · [CHANGELOG.md](CHANGELOG.md) — what changed when
+- `scripts/showcase.py` rebuilds the screenshots above from a throwaway project
+- Out of scope on purpose: a hosted service, typing into the running session, choosing the template from the map
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE) — free to use, modify and distribute.
+
+## Contributing
+
+Issues and pull requests are welcome. Start with the [contribution guide](CONTRIBUTING.md); every change keeps the suite hermetic and both READMEs in step.

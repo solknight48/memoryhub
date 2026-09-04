@@ -8,7 +8,10 @@ All notable changes to `mh` are recorded here. The format follows
 
 ### Added
 - README rewritten picture-first, English as the front page (`README.md`) and
-  Chinese as `README.zh.md`; the screenshots come from `scripts/showcase.py`,
+  Chinese as `README.zh.md`: a hero, one promise, four value bullets, badges, a
+  one-line install, real captures in a table, a numbered quick start, a
+  "manage sessions" table pairing each task with its map control and its
+  command, why / how-it-works tables; the screenshots come from `scripts/showcase.py`,
   a throwaway café project that exercises stages, takes, sub-checkpoints,
   links, a skipped session and a live session.
 - **Sub-checkpoints**: `mh checkpoint <name> --under <ckpt>` (or the dotted

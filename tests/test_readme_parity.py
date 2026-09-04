@@ -94,6 +94,11 @@ def test_every_cli_command_is_documented():
         assert not undocumented, f"{path.name} is missing commands: {undocumented}"
 
 
+def _links_to(text: str, name: str) -> bool:
+    """A markdown link, or the HTML one the centred language switcher uses."""
+    return f"]({name})" in text or f'href="./{name}"' in text or f'href="{name}"' in text
+
+
 def test_the_readmes_link_to_each_other():
-    assert f"]({ZH.name})" in _text(EN), f"{EN.name} does not link to {ZH.name}"
-    assert f"]({EN.name})" in _text(ZH), f"{ZH.name} does not link to {EN.name}"
+    assert _links_to(_text(EN), ZH.name), f"{EN.name} does not link to {ZH.name}"
+    assert _links_to(_text(ZH), EN.name), f"{ZH.name} does not link to {EN.name}"

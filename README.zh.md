@@ -1,29 +1,73 @@
-# MemoryHub (`mh`)
+<p align="center">
+  <a href="./README.md">English</a> · <strong>简体中文</strong>
+</p>
 
-[English](README.md) | **简体中文**
+![MemoryHub 地图：一个项目的会话，作为时间线上的检查点](docs/img/map.png)
+
+# MemoryHub
+
+**把每一场 AI 编程会话当作 git 管着的记忆来管理——提纯后保存，下次装回来，在地图上整理。**
+
+MemoryHub（`mh`）是一个小小的 Python CLI 加一张本机网页地图，面向 Claude Code、pi 和 Codex。会话结束，`mh save` 把它留下；下一场会话 `mh load`，项目记忆就回来了；`mh ui` 是你管理这一切的地方。
+
+- **每场会话都留下，噪音一点不留**——按规则提纯成 User/Agent 对话，不调用模型，存成检查点里的一个文件，提交进你自己的 git 仓库
+- **该装的时候装回来**——下一场会话从你所在的检查点出发，带上它的父级和链接，最新的优先，在 token 预算之内
+- **整理，而不是囤积**——跳过一场会话、删掉或改写一轮、把会话挪走、改存摘要，地图上或终端里都行
+- **长成项目的样子**——模板给出阶段，同一阶段可以并行几次尝试，子检查点划出更小的范围，该一起加载的用链接连起来
 
 [![CI](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml/badge.svg)](https://github.com/solknight48/memoryhub/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)
+![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?style=flat-square)
+![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20pi%20%C2%B7%20Codex-7C3AED?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.2.0-0891b2?style=flat-square)
 
-给 AI 会话上下文做的、像 git 一样的检查点。一场会话结束，`mh save` 把它提纯后存起来——只留对话，
-没有工具噪音，不调用模型。下一场会话 `mh load`，项目记忆就回来了。`mh ui` 是这一切的地图。
+```bash
+uv tool install git+https://github.com/solknight48/memoryhub && mh skill install
+```
 
-![时间线：阶段、第二次尝试、子检查点、链接、还没到的阶段](docs/img/map.png)
+Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12。新变化见[更新日志](CHANGELOG.md)。
 
-## 安装
+## 看看它的样子
 
-```sh
+下面是地图在一个小咖啡馆网站项目上的真实截图，不是效果图。
+
+| 点一个节点 | 打开一个检查点 | 保存正在进行的会话 |
+|---|---|---|
+| ![节点菜单：打开、设为当前、子检查点、再来一次、链接、重命名、删除](docs/img/node-menu.png) | ![一个检查点的会话；其中一场取消了勾选，加载时跳过](docs/img/checkpoint.png) | ![保存框：对话还是摘要，存到哪个检查点](docs/img/save-box.png) |
+| 能对它做的一切，每项一句说明。 | 取消勾选一场会话，之后每次加载都不带它。 | 原样存对话，或者存 agent 写的摘要。 |
+
+一场已保存的会话就是对话本身，别无其他。可以改写或删除单独一轮；中枢保留历史。
+
+![一场已保存、提纯后的会话，每轮都有编辑和删除](docs/img/session.png)
+
+正在进行的会话，连思考和工具调用一起显示，顶部是保存框。
+
+![实时会话面板与保存框](docs/img/live.png)
+
+新建检查点：模板里的下一个阶段、同一阶段的另一次尝试、子检查点，或任意名字。
+
+![新建检查点菜单](docs/img/new-checkpoint.png)
+
+## 快速上手
+
+### 1. 安装
+
+```bash
 uv tool install git+https://github.com/solknight48/memoryhub
 mh skill install           # 让 Claude Code 学会 /mh 工作流
 ```
 
-Linux 或 macOS，git ≥ 2.32，Python ≥ 3.12。
+### 2. 给项目一个中枢
 
-## 快速上手
-
-```sh
+```bash
 cd my-site
-mh init --template frontend   # 在项目里建中枢，阶段名字已备好
+mh init --template frontend   # .memoryhub/，带上前端项目的阶段
 mh checkpoint                 # 第一个阶段：requirement-analysis
+```
+
+### 3. 干活、保存、加载
+
+```bash
 # …… 和 Claude Code 一起干活；结束时 agent 会运行：
 mh save                       # 这场会话提纯后存入检查点
 # 下一次：
@@ -31,31 +75,42 @@ mh load                       # 记忆回到上下文里
 mh ui                         # 打开地图
 ```
 
-`mh hook install` 让 Claude Code 自己完成 load 和 save。
+`mh hook install` 让 Claude Code 在会话开始时自动 load、结束时自动 save。
 
-## 地图
+## 管理会话
 
-点一个节点，看看能对它做什么。
+| 你想要 | 地图上 | 终端里 |
+|---|---|---|
+| 留下这场会话 | 保存框 → **Dialog** | `mh save` |
+| 改存一份摘要 | 保存框 → **Summary** | `mh save --compact --with agent` |
+| 加载时不带某场会话 | 取消勾选 | `mh skip CKPT/SESSION` |
+| 改写或删掉某一轮 | 该轮的 edit / delete | `mh edit`、`mh rm -x N` |
+| 把会话挪到别处 | 那一行的 move… | `mh mv CKPT/SESSION CKPT` |
+| 让两个检查点一起加载 | 节点 → Link to… | `mh link A B` |
+| 在更小的范围里工作 | 节点 → Sub-checkpoint… | `mh checkpoint NAME --under CKPT` |
+| 同一阶段并行再试一次 | 节点 → Another take | `mh checkpoint --at STAGE` |
+| 整个节点一起加载 | 勾选 "with sub-checkpoints" | `mh load --tree` |
+| 找到会话的来源 | open original ↗ | `mh trace CKPT/SESSION` |
+| 导入过去的会话 | — | `mh import` |
+| 撤销任何改动 | — | `git -C .memoryhub revert HEAD` |
 
-![节点菜单](docs/img/node-menu.png)
+## 为什么用 MemoryHub
 
-一个检查点和它的会话。取消勾选某个会话，`mh load` 就不再带上它。
+- **机械地提纯**——工具调用、思考、框架包装和末尾没回答的问句都按规则剥掉。存下来的读起来就是那场对话，而且不花一分钱。
+- **是 git 仓库，不是数据库**——`.memoryhub/` 是普通仓库里的普通 markdown：可以 diff、push、revert，不装 mh 也能读。
+- **默认彼此独立**——检查点各自加载，除非你把它们链接起来；子检查点在父级之内加载；再来一次是一条并行的路，不是副本。
+- **地图说实话**——紫色就是下一次 `mh load` 会装的东西；加载够不到的链接是灰的；终端里的改动一次轮询内就出现。
+- **只在本机**——回环地址、每次启动一个 token、不上云。除非你 push 中枢，什么都不会离开这台机器。唯一的一次模型调用（写摘要）用的也是你本来就在用的 CLI。
 
-![带一个被跳过会话的检查点](docs/img/checkpoint.png)
+## 工作原理
 
-一场提纯后的会话：只有对话，别无其他。可以改写或删除单独一轮。
-
-![一场已保存的会话](docs/img/session.png)
-
-正在进行的会话，连思考和工具调用一起显示，顶部是保存框：存成对话，或存成 agent 写的摘要。
-
-![实时会话](docs/img/live.png)
-
-![保存框，选了摘要](docs/img/save-box.png)
-
-新建检查点：模板里的下一个阶段、同一阶段的另一次尝试、子检查点，或任意名字。
-
-![新建检查点菜单](docs/img/new-checkpoint.png)
+| 步骤 | 发生了什么 |
+|---|---|
+| **保存** | 找到会话的 transcript，把每个用户轮次和随后的回答配对，其余全部剥掉。 |
+| **存放** | 对话以 `<结束时间>_<会话>.md` 落在当前检查点里，中枢里一次提交。一场会话只住在一个检查点。 |
+| **加载** | 当前检查点、它的父级和链接；会话按时间合并，最新优先，在预算之内（默认 20 000 token）。 |
+| **地图** | `mh ui` 画出中枢：阶段、尝试、子检查点、链接、下一次加载会装什么，以及此刻正在写的会话。 |
+| **整理** | 跳过、编辑、移动、摘要都是和别的一样的提交；地图和 CLI 对每件事共用一条规则。 |
 
 ## 命令
 
@@ -86,39 +141,24 @@ mh ui                         # 打开地图
 
 ## 全自动
 
-```sh
+```bash
 mh hook install            # 本项目：会话开始时 load，结束时 save
 mh hook install --user     # 所有项目
+mh hook install --remove   # 撤销
 ```
 
-SessionStart hook 注入 `mh load`；SessionEnd 和 PreCompact 运行 `mh save`。
-`mh hook install --remove` 撤销。
+SessionStart 注入 `mh load`；SessionEnd 和 PreCompact 运行 `mh save`。
 
-## 值得了解的
+## 参考与范围
 
-- **提纯**只留 User/Agent 对话。工具调用、思考、框架包装和末尾没回答的问句都按规则机械地剥掉。
-- **检查点彼此独立。** `mh link A B` 让两个一起加载，按时间合并。`mh load` 先装最新的会话，
-  直到 `--budget`（默认 20 000 token）。
-- **再来一次**：`design-2` 是穿过同一阶段的另一条路。**子检查点**：`design.header` 是 design 里的
-  一个范围，加载它也会带上 design，`--tree` 则加载整个节点。
-- **模板**给一类项目的阶段起好名字（`mh template --list`）。在终端里选；地图画出还没到的阶段。
-- **跳过**一个会话（`mh skip`，或它那一行的勾选框），之后每次加载都不带它，文件仍留在检查点里。
-- **摘要代替对话**：`mh save --compact --with agent` 让会话自己的 CLI（`claude -p`、`pi -p`）来写——
-  一次模型调用，正在运行的会话不受影响。
-- **每次改动都是一次提交**，`.memoryhub/` 就是一个普通 git 仓库，可以 push。
-  `git -C .memoryhub revert HEAD` 就是撤销。
-- **只在本机。** 地图只监听回环地址，每次启动一个 token。除非你 push 中枢，什么都不会离开这台机器。
-
-## 开发
-
-```sh
-uv run pytest -q           # 测试套件，密闭、并行
-uv run ruff check src tests && uv run ruff format --check src tests
-```
-
-[CONTRIBUTING.md](CONTRIBUTING.md) 列出改动必须守住的不变量；[CHANGELOG.md](CHANGELOG.md)
-记录何时改了什么。`scripts/showcase.py` 用一个一次性项目重新生成上面的截图。
+- [CONTRIBUTING.md](CONTRIBUTING.md)——改动必须守住的不变量 · [CHANGELOG.md](CHANGELOG.md)——何时改了什么
+- `scripts/showcase.py` 用一个一次性项目重新生成上面的截图
+- 有意不做的：托管服务、往正在运行的会话里打字、在地图上选模板
 
 ## 许可证
 
-[MIT](LICENSE)。
+[MIT](LICENSE)——自由使用、修改和分发。
+
+## 参与贡献
+
+欢迎 issue 和 pull request。从[贡献指南](CONTRIBUTING.md)开始；每个改动都要保持测试套件密闭、两份 README 同步。
