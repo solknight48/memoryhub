@@ -6,6 +6,10 @@ All notable changes to `mh` are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- README: an install / upgrade table for uv, pipx and pip, the note that hooks
+  need `mh` on PATH, and PyPI linked from the top line and the reference list.
+
 ## [0.3.0] - 2026-09-04
 
 ### Added

@@ -25,7 +25,7 @@ MemoryHub（`mh`）是一个小小的 Python CLI 加一张本机网页地图，�
 uv tool install memoryhub-mh && mh skill install
 ```
 
-Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12 · 也可以 `pipx install memoryhub-mh` 或 `pip install memoryhub-mh`。新变化见[更新日志](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)。
+Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12 · 已发布到 [PyPI](https://pypi.org/project/memoryhub-mh/)，包名 `memoryhub-mh`。新变化见[更新日志](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)。
 
 ## 看看它的样子
 
@@ -53,11 +53,17 @@ Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12 · 也可以 `pipx install me
 ### 1. 安装
 
 ```bash
-uv tool install memoryhub-mh   # 或：pipx install memoryhub-mh · pip install memoryhub-mh
+uv tool install memoryhub-mh   # 包名是 memoryhub-mh，命令是 mh
 mh skill install               # 让 Claude Code 学会 /mh 工作流
 ```
 
-包名是 `memoryhub-mh`，命令是 `mh`。机器上没有 Python 3.12 时 `uv` 会自己取一个；`pipx` 和 `pip` 需要先装好。
+| | 安装 | 升级 |
+|---|---|---|
+| uv——机器上没有 Python 3.12 会自己取一个 | `uv tool install memoryhub-mh` | `uv tool upgrade memoryhub-mh` |
+| pipx | `pipx install memoryhub-mh` | `pipx upgrade memoryhub-mh` |
+| pip——Python ≥ 3.12，建议在 venv 里 | `pip install memoryhub-mh` | `pip install -U memoryhub-mh` |
+
+钩子直接运行 `mh`，所以它得在 PATH 上：uv 和 pipx 会放好，venv 只在激活时才有。开发版：`uv tool install git+https://github.com/solknight48/memoryhub`。
 
 ### 2. 给项目一个中枢
 
@@ -153,7 +159,7 @@ SessionStart 注入 `mh load`；SessionEnd 和 PreCompact 运行 `mh save`。
 
 ## 参考与范围
 
-- [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md)——改动必须守住的不变量 · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)——何时改了什么
+- [PyPI](https://pypi.org/project/memoryhub-mh/)——发布版本，每个都是 CI 从 `vX.Y.Z` 标签发出的 · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)——何时改了什么 · [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md)——改动必须守住的不变量，以及如何发版
 - `scripts/showcase.py` 用一个一次性项目重新生成上面的截图
 - 有意不做的：托管服务、往正在运行的会话里打字、在地图上选模板
 

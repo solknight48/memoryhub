@@ -25,7 +25,7 @@ MemoryHub (`mh`) is a small Python CLI and a local web map for Claude Code, pi a
 uv tool install memoryhub-mh && mh skill install
 ```
 
-Linux or macOS · git ≥ 2.32 · Python ≥ 3.12 · `pipx install memoryhub-mh` and `pip install memoryhub-mh` work too. See the [changelog](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) for what is new.
+Linux or macOS · git ≥ 2.32 · Python ≥ 3.12 · on [PyPI](https://pypi.org/project/memoryhub-mh/) as `memoryhub-mh`. See the [changelog](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) for what is new.
 
 ## See it in action
 
@@ -53,11 +53,17 @@ New checkpoint: the template's next stage, another take at this one, a sub-check
 ### 1. Install
 
 ```bash
-uv tool install memoryhub-mh   # or: pipx install memoryhub-mh · pip install memoryhub-mh
+uv tool install memoryhub-mh   # the package is memoryhub-mh, the command is mh
 mh skill install               # teaches Claude Code the /mh workflow
 ```
 
-The package is `memoryhub-mh`, the command is `mh`. `uv` fetches Python 3.12 when the machine has none; `pipx` and `pip` need it installed.
+| | Install | Upgrade |
+|---|---|---|
+| uv — fetches Python 3.12 if the machine has none | `uv tool install memoryhub-mh` | `uv tool upgrade memoryhub-mh` |
+| pipx | `pipx install memoryhub-mh` | `pipx upgrade memoryhub-mh` |
+| pip — Python ≥ 3.12, in a venv | `pip install memoryhub-mh` | `pip install -U memoryhub-mh` |
+
+Hooks run plain `mh`, so it must be on PATH: uv and pipx put it there, a venv only while it is active. The development version is `uv tool install git+https://github.com/solknight48/memoryhub`.
 
 ### 2. Give the project a hub
 
@@ -153,7 +159,7 @@ SessionStart injects `mh load`; SessionEnd and PreCompact run `mh save`.
 
 ## Reference and scope
 
-- [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md) — the invariants a change must keep · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) — what changed when
+- [PyPI](https://pypi.org/project/memoryhub-mh/) — releases, each a `vX.Y.Z` tag published by CI · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) — what changed when · [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md) — the invariants a change must keep, and how a release is cut
 - `scripts/showcase.py` rebuilds the screenshots above from a throwaway project
 - Out of scope on purpose: a hosted service, typing into the running session, choosing the template from the map
 
