@@ -8,6 +8,8 @@
 
 **Manage every AI coding session as git-backed memory — save it purified, load it back, curate it on a map.**
 
+*Managing context is all you need; leave everything else to the model.*
+
 MemoryHub (`mh`) is a small Python CLI and a local web map for Claude Code, pi and Codex. A session ends and `mh save` keeps it; the next session runs `mh load` and the project's memory is back; `mh ui` is where you manage all of it.
 
 - **Every session kept, none of the noise** — purified to the User/Agent dialog by rule, no model call, stored as a file in a checkpoint, committed to a git repo you own

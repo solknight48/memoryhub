@@ -8,6 +8,8 @@
 
 **把每一场 AI 编程会话当作 git 管着的记忆来管理——提纯后保存，下次装回来，在地图上整理。**
 
+*管理好 context，is all you need；剩下的，交给模型。*
+
 MemoryHub（`mh`）是一个小小的 Python CLI 加一张本机网页地图，面向 Claude Code、pi 和 Codex。会话结束，`mh save` 把它留下；下一场会话 `mh load`，项目记忆就回来了；`mh ui` 是你管理这一切的地方。
 
 - **每场会话都留下，噪音一点不留**——按规则提纯成 User/Agent 对话，不调用模型，存成检查点里的一个文件，提交进你自己的 git 仓库
