@@ -21,7 +21,7 @@ uv run ruff check               # lint
 uv run ruff format --check      # formatting (`uv run ruff format` to apply)
 ```
 
-CI runs exactly these on Linux and macOS, Python 3.12 and 3.13. The UI tests
+CI runs exactly these on Linux and macOS, Python 3.12 to 3.14. The UI tests
 need `node` (they run the page's own JavaScript through `tests/uijs.mjs`) and
 skip without it.
 
@@ -86,3 +86,20 @@ Imperative, one line that says what changed and why it mattered —
 `mh ui: make a saved session readable — HEY-style map, tables, model badges`
 is the house style. Curation commits inside a hub are written by `mh` itself;
 leave their wording alone.
+
+## Releasing
+
+The package on PyPI is `memoryhub-mh` — the name `memoryhub` belongs to another
+project — and the command is `mh` regardless. A release is a tag:
+
+1. Set `__version__` in `src/memoryhub/__init__.py`, turn the *Unreleased*
+   section of `CHANGELOG.md` into `## [X.Y.Z] - YYYY-MM-DD`, commit to `main`.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+`.github/workflows/release.yml` then checks that the tag names the version the
+code and the changelog carry, runs lint and the suite, builds, runs the wheel
+once on its own (`uvx --from dist/*.whl mh --version`) and publishes through
+PyPI trusted publishing — the `pypi` environment, no token stored anywhere. To
+publish a build by hand instead: `uv build && uv publish` with your own
+credentials. `tests/test_packaging.py` builds the wheel too, so a broken
+package mapping fails the suite before it reaches a tag.

@@ -95,8 +95,9 @@ def test_every_cli_command_is_documented():
 
 
 def _links_to(text: str, name: str) -> bool:
-    """A markdown link, or the HTML one the centred language switcher uses."""
-    return f"]({name})" in text or f'href="./{name}"' in text or f'href="{name}"' in text
+    """A markdown or HTML link ending in the file's name — relative, or the absolute GitHub
+    URL the READMEs use so the same text renders on the PyPI page."""
+    return re.search(rf'(?:\]\(|href=")(?:[^)"\s]*/)?{re.escape(name)}[)"]', text) is not None
 
 
 def test_the_readmes_link_to_each_other():

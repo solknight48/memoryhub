@@ -1,0 +1,44 @@
+name: release
+
+# A `vX.Y.Z` tag publishes memoryhub-mh to PyPI through trusted publishing: PyPI
+# trusts this workflow (repository, file name, environment `pypi`), so no token is
+# stored anywhere. The tag must name the version the code carries.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+      - name: The tag names the version the code carries
+        run: |
+          code=$(grep -oP '__version__ = "\K[^"]+' src/memoryhub/__init__.py)
+          if [ "v$code" != "$GITHUB_REF_NAME" ]; then
+            echo "tag is $GITHUB_REF_NAME but memoryhub.__version__ is $code" >&2
+            exit 1
+          fi
+          grep -q "^## \[$code\] - " CHANGELOG.md || { echo "CHANGELOG.md has no [$code] section" >&2; exit 1; }
+      - run: uv run --locked ruff check
+      - run: uv run --locked pytest -q
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # the OIDC token PyPI exchanges for an upload; nothing else
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+      - run: uv build
+      - name: The wheel runs on its own
+        run: uvx --from dist/*.whl mh --version
+      - run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/memoryhub-mh/

@@ -1,8 +1,8 @@
 <p align="center">
-  <strong>English</strong> · <a href="./README.zh.md">简体中文</a>
+  <strong>English</strong> · <a href="https://github.com/solknight48/memoryhub/blob/main/README.zh.md">简体中文</a>
 </p>
 
-![The MemoryHub map: a project's sessions as checkpoints on a timeline](docs/img/map.png)
+![The MemoryHub map: a project's sessions as checkpoints on a timeline](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/map.png)
 
 # MemoryHub
 
@@ -19,13 +19,13 @@ MemoryHub (`mh`) is a small Python CLI and a local web map for Claude Code, pi a
 ![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?style=flat-square)
 ![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20pi%20%C2%B7%20Codex-7C3AED?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.2.0-0891b2?style=flat-square)
+[![PyPI](https://img.shields.io/pypi/v/memoryhub-mh?style=flat-square&color=0891b2)](https://pypi.org/project/memoryhub-mh/)
 
 ```bash
-uv tool install git+https://github.com/solknight48/memoryhub && mh skill install
+uv tool install memoryhub-mh && mh skill install
 ```
 
-Linux or macOS · git ≥ 2.32 · Python ≥ 3.12. See the [changelog](CHANGELOG.md) for what is new.
+Linux or macOS · git ≥ 2.32 · Python ≥ 3.12 · `pipx install memoryhub-mh` and `pip install memoryhub-mh` work too. See the [changelog](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) for what is new.
 
 ## See it in action
 
@@ -33,29 +33,31 @@ Real captures of the map on a small café-site project, not mockups.
 
 | Click a node | Open a checkpoint | Save the running session |
 |---|---|---|
-| ![The node menu: open, make current, sub-checkpoint, another take, link, rename, delete](docs/img/node-menu.png) | ![A checkpoint's sessions; one unticked and skipped on load](docs/img/checkpoint.png) | ![The save box: dialog or summary, to which checkpoint](docs/img/save-box.png) |
+| ![The node menu: open, make current, sub-checkpoint, another take, link, rename, delete](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![A checkpoint's sessions; one unticked and skipped on load](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![The save box: dialog or summary, to which checkpoint](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
 | Everything you can do to it, with a word on each. | Untick a session and every load leaves it out. | Dialog as it is, or a summary the agent writes. |
 
 A saved session is the dialog and nothing else. Edit or delete an exchange; the hub keeps the history.
 
-![A saved session, purified, with edit and delete on each exchange](docs/img/session.png)
+![A saved session, purified, with edit and delete on each exchange](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/session.png)
 
 The session running right now, thinking and tool calls included, with the save box on top.
 
-![The live session panel with the save box](docs/img/live.png)
+![The live session panel with the save box](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/live.png)
 
 New checkpoint: the template's next stage, another take at this one, a sub-checkpoint, or any name.
 
-![The new-checkpoint menu](docs/img/new-checkpoint.png)
+![The new-checkpoint menu](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/new-checkpoint.png)
 
 ## Quick start
 
 ### 1. Install
 
 ```bash
-uv tool install git+https://github.com/solknight48/memoryhub
-mh skill install           # teaches Claude Code the /mh workflow
+uv tool install memoryhub-mh   # or: pipx install memoryhub-mh · pip install memoryhub-mh
+mh skill install               # teaches Claude Code the /mh workflow
 ```
+
+The package is `memoryhub-mh`, the command is `mh`. `uv` fetches Python 3.12 when the machine has none; `pipx` and `pip` need it installed.
 
 ### 2. Give the project a hub
 
@@ -151,14 +153,14 @@ SessionStart injects `mh load`; SessionEnd and PreCompact run `mh save`.
 
 ## Reference and scope
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — the invariants a change must keep · [CHANGELOG.md](CHANGELOG.md) — what changed when
+- [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md) — the invariants a change must keep · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md) — what changed when
 - `scripts/showcase.py` rebuilds the screenshots above from a throwaway project
 - Out of scope on purpose: a hosted service, typing into the running session, choosing the template from the map
 
 ## License
 
-[MIT](LICENSE) — free to use, modify and distribute.
+[MIT](https://github.com/solknight48/memoryhub/blob/main/LICENSE) — free to use, modify and distribute.
 
 ## Contributing
 
-Issues and pull requests are welcome. Start with the [contribution guide](CONTRIBUTING.md); every change keeps the suite hermetic and both READMEs in step.
+Issues and pull requests are welcome. Start with the [contribution guide](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md); every change keeps the suite hermetic and both READMEs in step.

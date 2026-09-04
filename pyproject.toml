@@ -1,16 +1,33 @@
 [project]
-name = "memoryhub"
+name = "memoryhub-mh"  # PyPI's `memoryhub` is another project; the import package and command stay memoryhub / mh
 dynamic = ["version"]
 description = "mh — git-like checkpoints for purified AI session context"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "solknight48" }]
+keywords = ["claude-code", "codex", "pi", "ai-agent", "session", "context", "memory", "checkpoint"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development",
+  "Topic :: Utilities",
+]
 dependencies = ["typer"]
 
 [project.urls]
 Homepage = "https://github.com/solknight48/memoryhub"
+Changelog = "https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md"
 Issues = "https://github.com/solknight48/memoryhub/issues"
+Source = "https://github.com/solknight48/memoryhub"
 
 [project.scripts]
 mh = "memoryhub.cli:app"
@@ -48,3 +65,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 path = "src/memoryhub/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memoryhub"]  # the distribution name differs from the package, so say where it is
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/docs", "/scripts", "/.github"]  # screenshots and dev tooling are not part of the source release

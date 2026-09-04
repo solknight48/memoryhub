@@ -6,7 +6,20 @@ All notable changes to `mh` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-04
+
 ### Added
+- **On PyPI as `memoryhub-mh`** — the name `memoryhub` belongs to another
+  project, so the distribution is `memoryhub-mh` while the command stays
+  `mh`: `uv tool install memoryhub-mh`, `pipx install memoryhub-mh` or
+  `pip install memoryhub-mh` (Python ≥ 3.12). A `v*` tag releases it:
+  `.github/workflows/release.yml` checks the tag against
+  `memoryhub.__version__` and the changelog, runs lint and the suite,
+  builds, runs the wheel once on its own and publishes through PyPI
+  trusted publishing — no token stored anywhere. The source distribution
+  leaves screenshots and scripts out, `tests/test_packaging.py` pins the
+  wheel's name, package data and entry point, and the READMEs link to
+  GitHub absolutely so the PyPI page renders the same text.
 - README rewritten picture-first, English as the front page (`README.md`) and
   Chinese as `README.zh.md`: a hero, one promise, four value bullets, badges, a
   one-line install, real captures in a table, a numbered quick start, a

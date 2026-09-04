@@ -60,7 +60,7 @@ wheels = [
 ]
 
 [[package]]
-name = "memoryhub"
+name = "memoryhub-mh"
 source = { editable = "." }
 dependencies = [
     { name = "typer" },

@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="./README.md">English</a> · <strong>简体中文</strong>
+  <a href="https://github.com/solknight48/memoryhub/blob/main/README.md">English</a> · <strong>简体中文</strong>
 </p>
 
-![MemoryHub 地图：一个项目的会话，作为时间线上的检查点](docs/img/map.png)
+![MemoryHub 地图：一个项目的会话，作为时间线上的检查点](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/map.png)
 
 # MemoryHub
 
@@ -19,13 +19,13 @@ MemoryHub（`mh`）是一个小小的 Python CLI 加一张本机网页地图，�
 ![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?style=flat-square)
 ![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20pi%20%C2%B7%20Codex-7C3AED?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.2.0-0891b2?style=flat-square)
+[![PyPI](https://img.shields.io/pypi/v/memoryhub-mh?style=flat-square&color=0891b2)](https://pypi.org/project/memoryhub-mh/)
 
 ```bash
-uv tool install git+https://github.com/solknight48/memoryhub && mh skill install
+uv tool install memoryhub-mh && mh skill install
 ```
 
-Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12。新变化见[更新日志](CHANGELOG.md)。
+Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12 · 也可以 `pipx install memoryhub-mh` 或 `pip install memoryhub-mh`。新变化见[更新日志](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)。
 
 ## 看看它的样子
 
@@ -33,29 +33,31 @@ Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12。新变化见[更新日志](
 
 | 点一个节点 | 打开一个检查点 | 保存正在进行的会话 |
 |---|---|---|
-| ![节点菜单：打开、设为当前、子检查点、再来一次、链接、重命名、删除](docs/img/node-menu.png) | ![一个检查点的会话；其中一场取消了勾选，加载时跳过](docs/img/checkpoint.png) | ![保存框：对话还是摘要，存到哪个检查点](docs/img/save-box.png) |
+| ![节点菜单：打开、设为当前、子检查点、再来一次、链接、重命名、删除](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![一个检查点的会话；其中一场取消了勾选，加载时跳过](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![保存框：对话还是摘要，存到哪个检查点](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
 | 能对它做的一切，每项一句说明。 | 取消勾选一场会话，之后每次加载都不带它。 | 原样存对话，或者存 agent 写的摘要。 |
 
 一场已保存的会话就是对话本身，别无其他。可以改写或删除单独一轮；中枢保留历史。
 
-![一场已保存、提纯后的会话，每轮都有编辑和删除](docs/img/session.png)
+![一场已保存、提纯后的会话，每轮都有编辑和删除](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/session.png)
 
 正在进行的会话，连思考和工具调用一起显示，顶部是保存框。
 
-![实时会话面板与保存框](docs/img/live.png)
+![实时会话面板与保存框](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/live.png)
 
 新建检查点：模板里的下一个阶段、同一阶段的另一次尝试、子检查点，或任意名字。
 
-![新建检查点菜单](docs/img/new-checkpoint.png)
+![新建检查点菜单](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/new-checkpoint.png)
 
 ## 快速上手
 
 ### 1. 安装
 
 ```bash
-uv tool install git+https://github.com/solknight48/memoryhub
-mh skill install           # 让 Claude Code 学会 /mh 工作流
+uv tool install memoryhub-mh   # 或：pipx install memoryhub-mh · pip install memoryhub-mh
+mh skill install               # 让 Claude Code 学会 /mh 工作流
 ```
+
+包名是 `memoryhub-mh`，命令是 `mh`。机器上没有 Python 3.12 时 `uv` 会自己取一个；`pipx` 和 `pip` 需要先装好。
 
 ### 2. 给项目一个中枢
 
@@ -151,14 +153,14 @@ SessionStart 注入 `mh load`；SessionEnd 和 PreCompact 运行 `mh save`。
 
 ## 参考与范围
 
-- [CONTRIBUTING.md](CONTRIBUTING.md)——改动必须守住的不变量 · [CHANGELOG.md](CHANGELOG.md)——何时改了什么
+- [CONTRIBUTING.md](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md)——改动必须守住的不变量 · [CHANGELOG.md](https://github.com/solknight48/memoryhub/blob/main/CHANGELOG.md)——何时改了什么
 - `scripts/showcase.py` 用一个一次性项目重新生成上面的截图
 - 有意不做的：托管服务、往正在运行的会话里打字、在地图上选模板
 
 ## 许可证
 
-[MIT](LICENSE)——自由使用、修改和分发。
+[MIT](https://github.com/solknight48/memoryhub/blob/main/LICENSE)——自由使用、修改和分发。
 
 ## 参与贡献
 
-欢迎 issue 和 pull request。从[贡献指南](CONTRIBUTING.md)开始；每个改动都要保持测试套件密闭、两份 README 同步。
+欢迎 issue 和 pull request。从[贡献指南](https://github.com/solknight48/memoryhub/blob/main/CONTRIBUTING.md)开始；每个改动都要保持测试套件密闭、两份 README 同步。
