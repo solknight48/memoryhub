@@ -109,20 +109,43 @@ h2 { font-size: 17px; margin: 0 0 14px; font-weight: 800; color: var(--text-prim
           color: var(--text-secondary); cursor: pointer; }
 .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 /* the save box: how this session is stored and where — the decision that
-   matters most on the live panel, so it is a panel of its own, not a menu */
+   matters most on the live panel, so it is a panel of its own, not a menu.
+   Two offers, one above the other, each with its own button: the summary
+   first, then the full dialog, whose card goes on to hold the exchange list
+   itself — what you curate sits inside the card that saves it, with the
+   show-toggles that steer that review. An offer that is not open here stays
+   readable and says why */
 .savebox { border: 1px solid var(--grid); border-radius: 14px; padding: 12px 16px 14px;
            margin-bottom: 14px; background: var(--page); }
 .savebox h3 { margin: 0; font-size: 14px; font-weight: 750; }
-.choice { display: grid; grid-template-columns: 18px 1fr; column-gap: 8px; align-items: baseline;
-          padding: 6px 0; cursor: pointer; }
-.choice input { margin: 0; accent-color: var(--accent); }
-.choice b { font-weight: 650; }
-.choice .hint { grid-column: 2; font-size: 12px; color: var(--muted); }
-.choice.off { opacity: 0.55; cursor: default; }
+.savelead { margin: 0 0 10px; font-size: 12.5px; color: var(--text-secondary); }
+.choices { display: grid; gap: 10px; }
+.choice { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px;
+          border: 1px solid var(--baseline); border-radius: 12px; background: var(--surface-1); }
+.choice b { font-weight: 650; font-size: 13.5px; }
+.choice .hint { font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.choice .when { font-size: 11.5px; color: var(--muted); }
+.choice .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.choice .note { margin-top: 2px; }
+.choice .note:empty { display: none; }
+.choice.off b { color: var(--muted); }
+.choice.off .when { display: none; }  /* no recommending a way that is closed */
+.showrow { display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+/* the exchange list, under the dialog card's head: one rule between, then the
+   exchanges flush with the card's own edge */
+#liveex { margin: 10px -14px -12px; padding: 12px 14px 0; border-top: 1px solid var(--grid); }
+/* read-only: nothing to save, but the show-toggles still steer the list */
+.savebox.ro { padding: 0; border: 0; background: transparent; }
+.savebox.ro > :not(.choices), .savebox.ro #choice-summary,
+.savebox.ro #choice-dialog > :not(.actions):not(#liveex), .savebox.ro #choice-dialog .actions button { display: none; }
+.savebox.ro #choice-dialog { border: 0; padding: 0; background: transparent; }
+.savebox.ro #choice-dialog .actions { margin: 0; padding: 8px 14px; border: 1px solid var(--grid);
+                                     border-radius: 12px; background: var(--page); }
+.savebox.ro #liveex { margin: 14px 0 0; padding: 0; border: 0; }
 #saveto { font: inherit; font-size: 12.5px; padding: 3px 8px; border-radius: 999px; margin-left: 4px;
           border: 1px solid var(--baseline); background: var(--surface-1); color: var(--text-primary); }
-#savefocus { width: 100%; max-width: 560px; font: inherit; font-size: 13px; padding: 6px 12px;
-             border-radius: 10px; border: 1px solid var(--baseline); background: var(--surface-1);
+#savefocus { flex: 1; min-width: 240px; font: inherit; font-size: 13px; padding: 6px 12px;
+             border-radius: 10px; border: 1px solid var(--baseline); background: var(--page);
              color: var(--text-primary); }
 #savefocus:focus { outline: none; border-color: var(--accent); }
 button.close { padding: 1px 9px 2px; font-size: 16px; line-height: 1.3; color: var(--muted); }
@@ -451,9 +474,6 @@ pre .t { color: var(--c-type); }
       <div class="toolbar">
         <button id="live-follow" hidden title="Follow another transcript of this project">switch session ▾</button>
         <button id="live-newest" hidden title="This session is not the newest transcript of the project">follow the newest</button>
-        <span class="meta" title="What the panel shows, nothing more — the dialog always stays, and the agent is not affected either way">show</span>
-        <label class="toggle" title="Ticked, the agent's thinking shows between its replies; unticked, it is left out of the page"><input type="checkbox" id="livethink" checked> thinking</label>
-        <label class="toggle" title="Ticked, every tool call shows where it happened, its arguments one click away; unticked, they are left out of the page"><input type="checkbox" id="livetools" checked> tool calls</label>
         <button id="live-discard" hidden class="danger">discard live edits…</button>
       </div>
     </div>
@@ -462,25 +482,42 @@ pre .t { color: var(--c-type); }
       <span class="meta" id="livemeta"></span>
     </div>
     <div class="savebox" id="savebox" hidden>
-      <div class="sechead" style="margin-bottom:6px">
+      <div class="sechead" style="margin-bottom:4px">
         <h3>Save this session</h3>
         <span class="badge" id="livesaved" hidden></span>
         <span class="spacer"></span>
-        <label class="meta" title="The checkpoint the session is stored in — another one moves it there">to <select id="saveto"></select></label>
+        <label class="meta" title="The checkpoint this session is stored in — pick another one to move it there">to <select id="saveto"></select></label>
       </div>
-      <label class="choice"><input type="radio" name="savekind" value="dialog" checked>
-        <b>Dialog</b><span class="hint" id="savedialoghint"></span></label>
-      <label class="choice"><input type="radio" name="savekind" value="summary">
-        <b>Summary</b><span class="hint" id="savesummaryhint"></span></label>
-      <div id="savefocusrow" hidden style="margin:2px 0 2px 26px">
-        <input type="text" id="savefocus" placeholder="focus the summary on… (optional — like /compact <instructions>)">
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button id="savego" class="mint">Save</button>
-        <span class="meta" id="savenote"></span>
+      <p class="savelead">Let the agent condense it, or keep every word and curate it yourself.</p>
+      <div class="choices">
+        <div class="choice" id="choice-summary">
+          <b>Summary</b>
+          <span class="hint" id="savesummaryhint"></span>
+          <span class="when">For when only the outcome matters.</span>
+          <div class="actions">
+            <input type="text" id="savefocus" placeholder="What should the summary focus on? Optional.">
+            <button id="savesummarygo" class="mint">Write summary</button>
+          </div>
+          <div class="meta note" id="savesummarynote"></div>
+        </div>
+        <div class="choice" id="choice-dialog">
+          <b>Full dialog</b>
+          <span class="hint" id="savedialoghint"></span>
+          <span class="when">For when the details matter.</span>
+          <div class="actions">
+            <span class="showrow" id="saveshowrow">
+              <span class="meta" title="What the list shows while you review — a save keeps the dialog, never thinking or tool calls">show</span>
+              <label class="toggle" title="Ticked, the agent's thinking shows between its replies; unticked, it is left out of the page"><input type="checkbox" id="livethink" checked> thinking</label>
+              <label class="toggle" title="Ticked, every tool call shows where it happened, its arguments one click away; unticked, they are left out of the page"><input type="checkbox" id="livetools" checked> tool calls</label>
+            </span>
+            <span class="spacer"></span>
+            <button id="savedialoggo" class="mint">Save full dialog</button>
+          </div>
+          <div class="meta note" id="savedialognote"></div>
+          <div id="liveex"></div>
+        </div>
       </div>
     </div>
-    <div id="liveex"></div>
   </section>
 
   <section id="memsec" hidden>
@@ -1572,6 +1609,13 @@ function setLiveShown(on) {
   localStorage.setItem(LIVE_KEY, on ? "1" : "0");
   applyLiveShown();
 }
+// What the feed shows of the stream — thinking, tool calls — is a preference
+// too, remembered the same way: every live view (the map's panel, a viewer
+// page, the next session's link, a reload) opens the way the reader left it.
+const SHOW_KEYS = { livethink: "mh.live.thinking", livetools: "mh.live.tools" };
+function loadShown() {
+  for (const id in SHOW_KEYS) $(id).checked = localStorage.getItem(SHOW_KEYS[id]) !== "0";
+}
 // which tool calls the reader has opened, kept across redraws so a poll two
 // seconds later does not close what they are in the middle of reading
 const LIVE_OPEN = new Set();
@@ -1597,7 +1641,7 @@ async function pollLive() {
         return;
       }
     }
-    if (d.unchanged) { LIVE.fp = d.fp; return; }
+    if (d.unchanged) { if (LIVE) LIVE.fp = d.fp; return; }
     LIVE = d;
     drawLive();
   } catch (e) {
@@ -1652,7 +1696,7 @@ function drawLive() {
   if (!d.saved) {
     saved.className = "badge"; saved.textContent = "not saved yet"; bits.push(stores);
   } else if (d.saved.compacted) {
-    saved.className = "badge ok"; saved.textContent = `compacted summary in ${d.saved.checkpoint}`;
+    saved.className = "badge ok"; saved.textContent = `summary saved in ${d.saved.checkpoint} ✓`;
   } else if (d.saved.in_sync) {
     saved.className = "badge ok"; saved.textContent = `saved in ${d.saved.checkpoint} ✓`;
   } else {
@@ -1689,6 +1733,7 @@ const streamWanted = () => $("livethink").checked || $("livetools").checked;
 function visibleParts(ex) {
   if (!ex.parts || !ex.parts.length) return ex;
   const think = $("livethink").checked, tools = $("livetools").checked;
+  if (!think && !tools) return { ...ex, parts: [] };  // the dialog, as a save would store it
   const parts = ex.parts.filter((p) => (p.kind === "thinking" ? think : p.kind === "tool" ? tools : true));
   if (parts.length) return { ...ex, parts };
   const hidden = [!think && "thinking", !tools && "tool calls"].filter(Boolean).join(" and ");
@@ -1825,73 +1870,84 @@ function liveEditCard(card, ex) {
   card.appendChild(wrap);
 }
 
-// Two ways to store the session: the purified dialog, or a summary written by
-// the CLI that runs the session — claude -p or pi -p, started fresh in a scratch
-// directory with that tool's own /compact prompt. Nothing is sent to the
-// running session; the cost is one model call on the user's account.
 // --- the save box ----------------------------------------------------------
-// How this session is stored, and where: two ways with a word on each, the
-// target checkpoint in the open (another one moves the session there), the
-// summary's focus inline, one button that says what it will do.
-let SAVE_KIND = null;  // "dialog" | "summary" — the reader's pick, kept across polls
+// Two offers, one above the other, each with its own button. First the
+// summary: written by the CLI that runs the session (claude -p or pi -p,
+// started fresh in a scratch directory with that tool's own /compact prompt;
+// nothing is sent to the running session, the cost is one model call on the
+// user's account), its focus field beside the button. Then the full dialog:
+// every exchange word for word, curated by hand — its card goes on to hold the
+// exchange list itself (drop, rewrite), with the show-toggles for thinking and
+// tool calls that steer that review. Each card says what it keeps and when to
+// pick it; the target checkpoint sits in the header (another one moves the
+// session there); each button names what it will do. Read-only keeps the
+// toggles and the list. An offer that is not open here stays on the page,
+// greyed, with the reason: the summary when there is no CLI for the agent,
+// the dialog when a summary is already saved — the panel never replaces a
+// summary with dialog (save.py keeps compacted saves; only an explicit
+// `mh save` brings the dialog back).
 let SAVE_TO = null;    // a target picked by hand; cleared once a save lands
 
+// which of the two offers this session can take from the panel right now
+function saveWays(d) {
+  const c = d.compactor || {};
+  return { dialog: !(d.saved && d.saved.compacted), summary: !!c.available };
+}
+
 function drawSaveBox(d) {
-  $("savebox").hidden = RO;
+  $("savebox").hidden = false;
+  $("savebox").classList.toggle("ro", RO);
   if (RO) return;
-  const c = d.compactor || {}, n = d.would_store;
-  if (SAVE_KIND === null) SAVE_KIND = d.saved && d.saved.compacted && c.available ? "summary" : "dialog";
-  if (SAVE_KIND === "summary" && !c.available) SAVE_KIND = "dialog";
-  $("savedialoghint").textContent = `${n} exchange${n === 1 ? "" : "s"}, purified — stored as they are`;
-  $("savesummaryhint").textContent = c.available
-    ? `${c.agent} writes it — one model call; the running session is not touched`
-    : `not available: ${c.reason || "no CLI for this session"}`;
-  const summary = document.querySelector("input[name=savekind][value=summary]");
-  summary.disabled = !c.available;
-  summary.closest("label").classList.toggle("off", !c.available);
-  document.querySelector(`input[name=savekind][value=${SAVE_KIND}]`).checked = true;
-  $("savefocusrow").hidden = SAVE_KIND !== "summary";
+  const c = d.compactor || {}, n = d.would_store, can = saveWays(d);
+  $("savedialoghint").textContent = can.dialog
+    ? `Every exchange as it was said — ${n} right now. Review them here: drop or rewrite any, then save.`
+    : `A summary is saved in ${d.saved.checkpoint}. To keep the full dialog instead, run mh save in the terminal.`;
+  $("savesummaryhint").textContent = can.summary
+    ? `${c.agent} reads the dialog and writes a short summary, the way /compact does. Your session keeps running — nothing is sent to it.`
+    : `Not available here — ${c.reason || "no CLI for this session"}.`;
+  $("choice-dialog").classList.toggle("off", !can.dialog);
+  $("choice-summary").classList.toggle("off", !can.summary);
+  $("savefocus").hidden = !can.summary;
   // the target: where the session lives, else the current checkpoint; any other can be picked
   const sel = $("saveto"), want = SAVE_TO || saveTarget(d);
   const slugs = DATA ? DATA.checkpoints.map((x) => x.slug) : [];
   sel.textContent = "";
   [...new Set([...slugs, want])].forEach((slug) => sel.appendChild(el("option", { value: slug, text: slug })));
   sel.value = want;
-  updateSaveButton(d);
+  updateSaveButtons(d);
 }
 
-function updateSaveButton(d) {
-  const to = $("saveto").value;
-  $("savego").textContent = (SAVE_KIND === "summary" ? "Write summary to " : "Save dialog to ") + to;
-  $("savenote").textContent = d.saved && d.saved.checkpoint !== to
-    ? `moves the session out of ${d.saved.checkpoint}`
-    : d.saved && d.saved.compacted && SAVE_KIND === "dialog"
-      ? "replaces the compacted summary with the dialog"
-      : "";
+function updateSaveButtons(d) {
+  const to = $("saveto").value, can = saveWays(d), s = d.saved;
+  const moving = s && s.checkpoint !== to ? `moves the session out of ${s.checkpoint}` : "";
+  $("savedialoggo").disabled = !can.dialog;
+  $("savedialoggo").textContent = "Save full dialog to " + to;
+  $("savedialognote").textContent = can.dialog ? moving : "";
+  $("savesummarygo").disabled = !can.summary;
+  $("savesummarygo").textContent = "Write summary to " + to;
+  $("savesummarynote").textContent = !can.summary ? "" : moving ? moving
+    : !s ? "" : s.compacted ? `replaces the summary in ${to} with a new one` : "replaces the saved dialog with the summary";
 }
 
 function wireSaveBox() {
-  document.querySelectorAll("input[name=savekind]").forEach((r) => {
-    r.onchange = () => {
-      SAVE_KIND = r.value;
-      $("savefocusrow").hidden = SAVE_KIND !== "summary";
-      if (SAVE_KIND === "summary") $("savefocus").focus();
-      if (LIVE) updateSaveButton(LIVE);
-    };
-  });
-  $("saveto").onchange = () => { SAVE_TO = $("saveto").value; if (LIVE) updateSaveButton(LIVE); };
-  $("savefocus").addEventListener("keydown", (e) => { if (e.key === "Enter") $("savego").click(); });
-  $("savego").onclick = () => {
+  $("saveto").onchange = () => { SAVE_TO = $("saveto").value; if (LIVE) updateSaveButtons(LIVE); };
+  $("savefocus").addEventListener("keydown", (e) => { if (e.key === "Enter") $("savesummarygo").click(); });
+  $("savedialoggo").onclick = () => {
     if (!LIVE) return;
     const to = $("saveto").value;
     SAVE_TO = null;  // after a save the box follows the session again
-    if (SAVE_KIND === "summary") compactLive(LIVE.compactor.agent, $("savefocus").value.trim(), to);
-    else liveAct("/api/live/save", { to }, (r) => `saved ${r.file} -> ${r.checkpoint}`);
+    liveAct("/api/live/save", { to }, (r) => `saved ${r.file} -> ${r.checkpoint}`);
+  };
+  $("savesummarygo").onclick = () => {
+    if (!LIVE) return;
+    const to = $("saveto").value;
+    SAVE_TO = null;
+    compactLive(LIVE.compactor.agent, $("savefocus").value.trim(), to);
   };
 }
 
 async function compactLive(agent, focus, to) {
-  const btn = $("savego");
+  const btn = $("savesummarygo");
   const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = `writing the summary with ${agent}…`;
@@ -1907,6 +1963,7 @@ async function compactLive(agent, focus, to) {
   } finally {
     btn.disabled = false;
     btn.textContent = label;
+    if (LIVE) updateSaveButtons(LIVE);
   }
 }
 
@@ -1915,7 +1972,13 @@ function wireLive() {
     setLiveShown(!LIVE_SHOWN);
     if (LIVE_SHOWN) $("livesec").scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  $("livethink").onchange = $("livetools").onchange = () => { LIVE = null; runLive(); };
+  loadShown();
+  $("livethink").onchange = $("livetools").onchange = (e) => {
+    localStorage.setItem(SHOW_KEYS[e.target.id], e.target.checked ? "1" : "0");
+    // the stream is on the page already: redraw from it, no round trip; a
+    // feed fetched as dialog only has to fetch it first
+    if (LIVE && LIVE.stream) drawLive(); else { LIVE = null; runLive(); }
+  };
   wireSaveBox();
   $("live-discard").onclick = (e) => confirmMenu(e.currentTarget,
     "Discard every live edit for this session? The dialog goes back to what the transcript says.",

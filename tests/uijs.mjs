@@ -33,6 +33,13 @@ const src = slice("function el(tag", "function tip(evt") +
             "const RO = false;\nconst liveAct = () => {};\nconst LIVE_OPEN = new Set();\n" +
             // memoryCard's onclick handlers reference these; they never fire at render
             "const openOriginal = () => {};\nconst jumpToMemory = () => {};\n" +
+            // the stream filter reads the two show-toggles through $; the shim
+            // holds their state, set per call by visiblePartsWith below
+            "const CHECKS = { livethink: true, livetools: true };\n" +
+            "const $ = (id) => ({ get checked() { return CHECKS[id]; } });\n" +
+            slice("const streamWanted", "function liveCard(") +
+            "function visiblePartsWith(think, tools, ex) {" +
+            " CHECKS.livethink = think; CHECKS.livetools = tools; return visibleParts(ex); }\n" +
             slice("function liveCard(", "function liveEditCard(") +
             slice("function memoryCard(", "function jumpToMemory(");
 
@@ -81,7 +88,7 @@ const document = {
 
 const fns = new Function(
   "document",
-  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, codeLang, memoryCard, sessionAvatar };"
+  src + "\nreturn { md, modelLabel, modelChip, avatarColor, liveCard, visiblePartsWith, codeLang, memoryCard, sessionAvatar };"
 )(document);
 
 const request = JSON.parse(readFileSync(0, "utf8"));

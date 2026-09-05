@@ -6,7 +6,35 @@ All notable changes to `mh` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-05
+
 ### Changed
+- The live panel's save box reads as two offers, not a mechanism, each with
+  its own button: **Summary** first (the session's CLI condenses it, the way
+  `/compact` does, without touching the running session; the focus field sits
+  beside the button), then **Full dialog** (every exchange as it was said),
+  whose card goes on to hold the exchange list itself — what you review, drop
+  and rewrite sits inside the card that saves it. Each card has a line on
+  what it keeps and when to pick it, and each button names what it will do
+  and where. The **thinking** and **tool calls** toggles moved from the
+  panel's header into the dialog card, because that is the review they steer.
+  Read-only keeps the toggles and the list. A way that is not open
+  stays on the page, greyed, with the reason — the summary without a CLI for
+  the agent, the dialog once a summary is saved. That last case used to carry
+  a note promising to replace the summary with the dialog, which the panel
+  never did (`save.py` keeps compacted saves; `mh save` brings the dialog
+  back) — it now says so.
+- The live panel's **thinking** and **tool calls** toggles are a remembered
+  preference: set once, they hold on every live view — the map's panel, a
+  viewer page, the next session's link, a reload — instead of coming back
+  ticked with each page. A toggle now redraws from the stream the page already
+  has, with no round trip, and with both off the feed shows the dialog exactly
+  as a save would store it.
+
+### Fixed
+- A live poll answered just after the page let go of its data (a toggle, a
+  switch of session) threw instead of being ignored, surfacing as a stray
+  error toast.
 - README: an install / upgrade table for uv, pipx and pip, the note that hooks
   need `mh` on PATH, and PyPI linked from the top line and the reference list.
 

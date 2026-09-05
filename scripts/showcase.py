@@ -428,8 +428,8 @@ def capture(url: str) -> None:
         pg.locator("#sessec").screenshot(path=str(OUT / "session.png"))
 
         pg.locator("#livesec").screenshot(path=str(OUT / "live.png"))
-        pg.evaluate("""() => { const r = document.querySelector('input[name=savekind][value=summary]');
-            r.checked = true; r.dispatchEvent(new Event('change')); }""")
+        # the box alone: its two offers, without the exchange list the dialog card heads
+        pg.add_style_tag(content="#liveex{display:none}")
         pg.wait_for_timeout(200)
         pg.locator("#savebox").screenshot(path=str(OUT / "save-box.png"))
         b.close()

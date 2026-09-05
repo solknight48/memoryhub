@@ -35,8 +35,8 @@ Linux 或 macOS · git ≥ 2.32 · Python ≥ 3.12 · 已发布到 [PyPI](https:
 
 | 点一个节点 | 打开一个检查点 | 保存正在进行的会话 |
 |---|---|---|
-| ![节点菜单：打开、设为当前、子检查点、再来一次、链接、重命名、删除](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![一个检查点的会话；其中一场取消了勾选，加载时跳过](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![保存框：对话还是摘要，存到哪个检查点](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
-| 能对它做的一切，每项一句说明。 | 取消勾选一场会话，之后每次加载都不带它。 | 原样存对话，或者存 agent 写的摘要。 |
+| ![节点菜单：打开、设为当前、子检查点、再来一次、链接、重命名、删除](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![一个检查点的会话；其中一场取消了勾选，加载时跳过](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![保存框：摘要还是完整对话，存到哪个检查点](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
+| 能对它做的一切，每项一句说明。 | 取消勾选一场会话，之后每次加载都不带它。 | 存 agent 写的摘要，或者逐字存下对话、由你整理。 |
 
 一场已保存的会话就是对话本身，别无其他。可以改写或删除单独一轮；中枢保留历史。
 
@@ -91,7 +91,7 @@ mh ui                         # 打开地图
 
 | 你想要 | 地图上 | 终端里 |
 |---|---|---|
-| 留下这场会话 | 保存框 → **Dialog** | `mh save` |
+| 留下这场会话 | 保存框 → **Full dialog** | `mh save` |
 | 改存一份摘要 | 保存框 → **Summary** | `mh save --compact --with agent` |
 | 加载时不带某场会话 | 取消勾选 | `mh skip CKPT/SESSION` |
 | 改写或删掉某一轮 | 该轮的 edit / delete | `mh edit`、`mh rm -x N` |

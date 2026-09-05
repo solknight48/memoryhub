@@ -35,8 +35,8 @@ Real captures of the map on a small café-site project, not mockups.
 
 | Click a node | Open a checkpoint | Save the running session |
 |---|---|---|
-| ![The node menu: open, make current, sub-checkpoint, another take, link, rename, delete](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![A checkpoint's sessions; one unticked and skipped on load](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![The save box: dialog or summary, to which checkpoint](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
-| Everything you can do to it, with a word on each. | Untick a session and every load leaves it out. | Dialog as it is, or a summary the agent writes. |
+| ![The node menu: open, make current, sub-checkpoint, another take, link, rename, delete](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/node-menu.png) | ![A checkpoint's sessions; one unticked and skipped on load](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/checkpoint.png) | ![The save box: a summary or the full dialog, to which checkpoint](https://raw.githubusercontent.com/solknight48/memoryhub/main/docs/img/save-box.png) |
+| Everything you can do to it, with a word on each. | Untick a session and every load leaves it out. | A summary the agent writes — or every word, curated by you. |
 
 A saved session is the dialog and nothing else. Edit or delete an exchange; the hub keeps the history.
 
@@ -91,7 +91,7 @@ mh ui                         # the map
 
 | You want to | On the map | In the terminal |
 |---|---|---|
-| Keep this session | save box → **Dialog** | `mh save` |
+| Keep this session | save box → **Full dialog** | `mh save` |
 | Keep a summary instead | save box → **Summary** | `mh save --compact --with agent` |
 | Leave a session out of loads | untick it | `mh skip CKPT/SESSION` |
 | Fix or drop one exchange | edit / delete on the exchange | `mh edit`, `mh rm -x N` |

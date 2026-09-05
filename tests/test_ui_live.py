@@ -244,3 +244,54 @@ def test_a_reply_whose_only_parts_are_hidden_says_so():
     html = card(parts=[], agent="", note="(only tool calls here — hidden)")
     assert "(only tool calls here — hidden)" in html
     assert "no textual reply" not in html
+
+
+# --- the show-toggles: what the feed shows of the stream ---------------------
+# Thinking and tool calls can each be left out of the page; the dialog always
+# stays. The filter runs on the stream the page already has, so a toggle is a
+# redraw, not a round trip — and with both off the card falls back to the
+# dialog exactly as a save would store it.
+
+STREAM = [
+    {"kind": "text", "text": "Looking at the tests first."},
+    {"kind": "thinking", "text": "the fixture has three turns"},
+    {"kind": "tool", "name": "Bash", "text": "uv run pytest -q", "preview": "uv run pytest -q"},
+    {"kind": "text", "text": "All green."},
+]
+
+
+def visible(think: bool, tools: bool, **over) -> dict:
+    ex = {"index": 2, "user": "run the suite", "agent": "All green.", "parts": STREAM}
+    ex.update(over)
+    return run_ui_js(visiblePartsWith=[[think, tools, ex]])["visiblePartsWith"][0]
+
+
+def kinds(ex: dict) -> list[str]:
+    return [p["kind"] for p in ex["parts"]]
+
+
+def test_both_on_shows_the_whole_stream():
+    assert kinds(visible(True, True)) == ["text", "thinking", "tool", "text"]
+
+
+def test_each_toggle_leaves_out_its_own_kind_and_nothing_else():
+    assert kinds(visible(False, True)) == ["text", "tool", "text"]
+    assert kinds(visible(True, False)) == ["text", "thinking", "text"]
+
+
+def test_both_off_is_the_dialog_not_the_streams_text_blocks():
+    ex = visible(False, False)
+    assert ex["parts"] == []  # the card renders ex.agent: the purified reply
+    assert ex["agent"] == "All green."
+
+
+def test_an_exchange_without_a_stream_is_untouched():
+    ex = visible(False, False, parts=None)
+    assert ex["parts"] is None and ex["agent"] == "All green."
+
+
+def test_only_hidden_kinds_and_no_reply_says_what_was_hidden():
+    ex = visible(False, True, agent="", parts=[STREAM[1]])
+    assert ex["parts"] == [] and ex["note"] == "(only thinking here — hidden)"
+    ex = visible(False, False, agent="", parts=[STREAM[1], STREAM[2]])
+    assert ex["parts"] == [] and "note" not in ex  # both off: the dialog, empty as it is
