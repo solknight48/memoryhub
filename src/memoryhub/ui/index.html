@@ -622,8 +622,7 @@ function ask(anchor, label, initial, onSubmit, opts = {}) {
                               placeholder: opts.placeholder || "letters and digits of any script" });
   const submit = () => {
     const v = field.value.trim();
-    // an optional field may submit empty; a name has to change to mean anything
-    if (!opts.optional && (!v || v === initial)) { closeMenu(); return; }
+    if (!v || v === initial) { closeMenu(); return; }
     closeMenu(); onSubmit(v);
   };
   field.addEventListener("keydown", (e) => {
