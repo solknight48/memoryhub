@@ -417,10 +417,10 @@ pre .t { color: var(--c-type); }
       <h2>Timeline</h2>
       <span class="meta" id="current"></span>
       <span class="spacer"></span>
-      <label class="meta" id="budget-label" title="Token budget of the next mh load — the map marks the sessions that fit">load budget
+      <label class="meta" title="Token budget of the next mh load — the map marks the sessions that fit">load budget
         <input type="number" id="budget" min="0" step="500"
                style="width:90px;display:inline-block;margin:0 4px"> tokens</label>
-      <label class="toggle" id="tree-label" title="Preview mh load --tree: whole nodes — every checkpoint in the pack brings the sub-checkpoints of its node (from inside design, all of design)"><input type="checkbox" id="tree"> with sub-checkpoints</label>
+      <label class="toggle" title="Preview mh load --tree: whole nodes — every checkpoint in the pack brings the sub-checkpoints of its node (from inside design, all of design)"><input type="checkbox" id="tree"> with sub-checkpoints</label>
     </div>
     <div class="mapwrap"><svg id="map" role="img" aria-label="Checkpoint timeline"></svg></div>
     <div class="legend">
@@ -505,7 +505,7 @@ pre .t { color: var(--c-type); }
           <span class="hint" id="savedialoghint"></span>
           <span class="when">For when the details matter.</span>
           <div class="actions">
-            <span class="showrow" id="saveshowrow">
+            <span class="showrow">
               <span class="meta" title="What the list shows while you review — a save keeps the dialog, never thinking or tool calls">show</span>
               <label class="toggle" title="Ticked, the agent's thinking shows between its replies; unticked, it is left out of the page"><input type="checkbox" id="livethink" checked> thinking</label>
               <label class="toggle" title="Ticked, every tool call shows where it happened, its arguments one click away; unticked, they are left out of the page"><input type="checkbox" id="livetools" checked> tool calls</label>
