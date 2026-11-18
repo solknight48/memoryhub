@@ -22,10 +22,6 @@ def hub_of(project):
     return project / ".memoryhub"
 
 
-def _trace(mh, project, session, *args):
-    return mh("trace", f"alpha/{session.name}", *args, cwd=project, check=0).stdout
-
-
 def _saved(mh, ws, project):
     mh("checkpoint", "alpha", cwd=project, check=0)
     livemod._discovery.clear()
