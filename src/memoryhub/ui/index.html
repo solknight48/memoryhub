@@ -2122,8 +2122,8 @@ function nodeMenu(anchor, c) {
 function actionMenu(anchor, label, items) {
   closeMenu();
   const m = el("div", { id: "menu" }, el("div", { class: "menu-label", text: label }));
-  items.forEach(([text, fn]) => m.appendChild(el("button", { text, disabled: fn ? null : "", onclick: (e) => {
-    e.stopPropagation(); closeMenu(); if (fn) fn();
+  items.forEach(([text, fn]) => m.appendChild(el("button", { text, onclick: (e) => {
+    e.stopPropagation(); closeMenu(); fn();
   } })));
   openMenu(m, anchor);
 }
